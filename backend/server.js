@@ -5,198 +5,152 @@ const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
+const db = require('./db');
 
-// Cargar variables de entorno
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? (process.env.FRONTEND_URL || true)
+    : 'http://localhost:5173',
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 
-// Servir archivos estáticos del frontend en producción
 const distPath = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 }
 
-// Ruta del archivo para guardar los tokens
-const TOKENS_FILE = path.join(__dirname, 'tokens.json');
+/* ==========================================================================
+   ESTADO DE SALAS EN MEMORIA
+   Mapa de roomId → RoomState (respaldado por PostgreSQL cuando está disponible)
+   ========================================================================== */
 
-// Estado en memoria
-let spotifyTokens = {
-  accessToken: null,
-  refreshToken: null,
-  expiresAt: null // Timestamp en ms
-};
+const rooms = new Map();
 
-let jamQueue = []; // Cola colaborativa de invitados
-let jamHistory = []; // Historial de canciones reproducidas
-let activeUsers = {}; // Usuarios/Invitados activos { nombre: último_timestamp }
-let pendingGuests = {}; // Lista de control de acceso de invitados: { nombre: 'pending' | 'approved' | 'rejected' }
-let currentTrackState = null; // Guardará el estado de reproducción de Spotify
+function createEmptyRoomState() {
+  return {
+    // Credenciales de Spotify (persistidas)
+    hostSpotifyId: null,
+    hostName: 'Anfitrión',
+    hostToken: null,
+    accessToken: null,
+    refreshToken: null,
+    expiresAt: null,
+    // Estado de sala (persistido)
+    jamQueue: [],
+    jamHistory: [],
+    pendingGuests: {},
+    guestTokens: {},
+    // Estado runtime (solo en memoria)
+    activeUsers: {},
+    currentTrackState: null,
+    cachedSpotifyPlayback: null,
+    lastSpotifyFetchTime: 0,
+    lastForcedUri: null,
+    spotifyFetchPromise: null
+  };
+}
 
-const STATE_FILE = path.join(__dirname, 'jam_state.json');
-
-function saveJamState() {
-  try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify({
-      jamQueue,
-      jamHistory,
-      pendingGuests
-    }, null, 2));
-  } catch (error) {
-    console.error('[Error] No se pudo guardar el estado del Jam:', error);
+function getOrCreateRoomState(roomId) {
+  if (!rooms.has(roomId)) {
+    rooms.set(roomId, createEmptyRoomState());
   }
+  return rooms.get(roomId);
 }
 
-// Cargar estado inicial del Jam
-if (fs.existsSync(STATE_FILE)) {
-  try {
-    const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    jamQueue = data.jamQueue || [];
-    jamHistory = data.jamHistory || [];
-    pendingGuests = data.pendingGuests || {};
-    console.log('[JamState] Estado del Jam cargado exitosamente desde disco.');
-  } catch (error) {
-    console.error('[Error] No se pudo cargar el estado del Jam:', error);
-  }
+// Persiste los campos durables de una sala a la BD (fire-and-forget por defecto)
+function persistRoom(roomId) {
+  const room = rooms.get(roomId);
+  if (!room || !room.hostToken) return;
+  db.saveRoom(roomId, {
+    hostSpotifyId: room.hostSpotifyId || '',
+    hostName: room.hostName,
+    hostToken: room.hostToken,
+    accessToken: room.accessToken || '',
+    refreshToken: room.refreshToken || '',
+    expiresAt: room.expiresAt || 0,
+    jamQueue: room.jamQueue,
+    jamHistory: room.jamHistory,
+    pendingGuests: room.pendingGuests,
+    guestTokens: room.guestTokens
+  }).catch(err => console.error(`[DB] Error persistiendo sala ${roomId}:`, err.message));
 }
 
-// Cache de estado de Spotify para evitar Rate Limits de la API
-let cachedSpotifyPlayback = null;
-let lastSpotifyFetchTime = 0;
-let removedQueueUris = new Set(); // URIs eliminadas manualmente para ocultar en la cola
-let lastForcedUri = null; // URI que /api/playback/next forzó; evita falsos positivos en detección de desviación
-let guestTokens = {}; // Mapa { nombre: token } para verificar identidad de invitados
+/* ==========================================================================
+   UTILIDADES DE RED
+   ========================================================================== */
 
-function invalidatePlaybackCache() {
-  lastSpotifyFetchTime = 0;
-}
-
-// Generar token secreto del anfitrión para seguridad de las APIs
-const crypto = require('crypto');
-let HOST_TOKEN = crypto.randomBytes(16).toString('hex');
-
-function isHostRequest(req) {
-  const cookieToken = req.cookies.jam_host_token;
-  const headerToken = req.headers['x-host-token'] || req.query.hostToken;
-  return cookieToken === HOST_TOKEN || headerToken === HOST_TOKEN;
-}
-
-// Middleware de validación del Host
-function hostAuthMiddleware(req, res, next) {
-  if (isHostRequest(req)) {
-    next();
-  } else {
-    res.status(403).json({ error: 'Acceso no autorizado. Se requieren credenciales de anfitrión.' });
-  }
-}
-
-// Cargar tokens existentes desde el archivo si existe
-if (fs.existsSync(TOKENS_FILE)) {
-  try {
-    const data = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
-    spotifyTokens = data;
-    if (spotifyTokens.hostToken) {
-      HOST_TOKEN = spotifyTokens.hostToken;
-    } else {
-      spotifyTokens.hostToken = HOST_TOKEN;
-      fs.writeFileSync(TOKENS_FILE, JSON.stringify(spotifyTokens, null, 2));
-    }
-    console.log('[Auth] Tokens cargados correctamente desde el disco.');
-
-    // Recuperar el nombre de perfil del host si no está guardado aún
-    if (spotifyTokens.accessToken && !spotifyTokens.hostName) {
-      getValidAccessToken().then(async (token) => {
-        const name = await fetchHostProfileName(token);
-        if (name) {
-          saveTokens({ hostName: name });
-        }
-      }).catch(() => {});
-    }
-  } catch (error) {
-    console.error('[Error] No se pudieron cargar los tokens guardados:', error);
-  }
-}
-
-// Obtener la IP local de la red Wi-Fi (filtrando VPNs/Hamachi y priorizando red física)
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
   let fallbackIp = 'localhost';
-  
   for (const name in interfaces) {
     for (const iface of interfaces[name]) {
-      // Filtrar IPv4 y direcciones no internas
       if (iface.family === 'IPv4' && !iface.internal) {
         const ip = iface.address;
-        
-        // Priorizar rangos estándar locales de Wi-Fi/Ethernet domésticos
         if (ip.startsWith('192.168.') || ip.startsWith('10.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) {
           return ip;
         }
-        
-        // Guardar como fallback si no es de red virtual Hamachi (25.x.x.x o 26.x.x.x)
         if (!ip.startsWith('25.') && !ip.startsWith('26.')) {
           fallbackIp = ip;
         }
       }
     }
   }
-  
   return fallbackIp;
 }
 
 const localIp = getLocalIp();
-const joinUrl = `http://${localIp}:${PORT}`;
+const baseUrl = process.env.NODE_ENV === 'production'
+  ? (process.env.FRONTEND_URL || `https://jamspotify.onrender.com`)
+  : `http://${localIp}:${PORT}`;
 
-// Obtener el nombre del Host de su perfil de Spotify
+/* ==========================================================================
+   HELPERS DE SPOTIFY (por sala)
+   ========================================================================== */
+
 async function fetchHostProfileName(accessToken) {
   try {
-    const response = await fetch('https://api.spotify.com/v1/me', {
+    const res = await fetch('https://api.spotify.com/v1/me', {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
-    if (response.ok) {
-      const data = await response.json();
-      return data.display_name || data.id;
+    if (res.ok) {
+      const data = await res.json();
+      return data.display_name || data.id || null;
     }
-  } catch (err) {
-    console.error('Error fetching host profile:', err);
-  }
+  } catch {}
   return null;
 }
 
-
-
-// Guardar tokens en disco
-function saveTokens(tokens) {
-  spotifyTokens = { ...spotifyTokens, ...tokens };
+async function fetchHostSpotifyId(accessToken) {
   try {
-    fs.writeFileSync(TOKENS_FILE, JSON.stringify(spotifyTokens, null, 2));
-    console.log('[Auth] Tokens guardados en disco.');
-  } catch (error) {
-    console.error('[Error] No se pudieron guardar los tokens:', error);
-  }
+    const res = await fetch('https://api.spotify.com/v1/me', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.id || null;
+    }
+  } catch {}
+  return null;
 }
 
-// Helper: Refrescar el token de Spotify
-async function refreshSpotifyToken() {
-  if (!spotifyTokens.refreshToken) {
-    throw new Error('No hay refresh token disponible.');
-  }
+async function refreshRoomToken(room) {
+  if (!room.refreshToken) throw new Error('No hay refresh token disponible.');
 
-  console.log('[Auth] Refrescando token de acceso de Spotify...');
-  
   const authHeader = Buffer.from(
     `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
   ).toString('base64');
 
   const params = new URLSearchParams();
   params.append('grant_type', 'refresh_token');
-  params.append('refresh_token', spotifyTokens.refreshToken);
+  params.append('refresh_token', room.refreshToken);
 
   const response = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
@@ -208,42 +162,71 @@ async function refreshSpotifyToken() {
   });
 
   const data = await response.json();
+  if (!response.ok) throw new Error(data.error_description || 'Error al refrescar token');
 
-  if (!response.ok) {
-    console.error('[Error Auth] Falló el refresco del token:', data);
-    throw new Error(data.error_description || 'Error al refrescar el token');
-  }
+  room.accessToken = data.access_token;
+  room.expiresAt = Date.now() + data.expires_in * 1000;
+  if (data.refresh_token) room.refreshToken = data.refresh_token;
 
-  const expiresAt = Date.now() + data.expires_in * 1000;
-  saveTokens({
-    accessToken: data.access_token,
-    expiresAt,
-    // Si viene un nuevo refresh token lo guardamos, si no dejamos el que estaba
-    refreshToken: data.refresh_token || spotifyTokens.refreshToken
-  });
-
-  return data.access_token;
+  return room.accessToken;
 }
 
-// Helper: Obtener un token de acceso válido
-async function getValidAccessToken() {
-  if (!spotifyTokens.accessToken) {
-    throw new Error('El Host no está autenticado con Spotify.');
+async function getValidRoomToken(room) {
+  if (!room.accessToken) throw new Error('El Host no está autenticado con Spotify.');
+  if (Date.now() + 300000 > room.expiresAt) {
+    return await refreshRoomToken(room);
   }
-
-  // Si expira en menos de 5 minutos, lo refrescamos
-  if (Date.now() + 300000 > spotifyTokens.expiresAt) {
-    return await refreshSpotifyToken();
-  }
-
-  return spotifyTokens.accessToken;
+  return room.accessToken;
 }
 
 /* ==========================================================================
-   RUTAS DE AUTENTICACIÓN (OAUTH 2.0)
+   MIDDLEWARE
    ========================================================================== */
 
-// 1. Redirección para iniciar sesión en Spotify
+async function roomMiddleware(req, res, next) {
+  const { roomId } = req.params;
+
+  if (!rooms.has(roomId)) {
+    // Intentar cargar desde BD
+    const dbData = await db.loadRoom(roomId);
+    if (!dbData) {
+      return res.status(404).json({ error: 'Sala no encontrada.' });
+    }
+    const state = getOrCreateRoomState(roomId);
+    Object.assign(state, dbData);
+  }
+
+  req.room = rooms.get(roomId);
+  req.roomId = roomId;
+  next();
+}
+
+function isHostRequest(req) {
+  const room = req.room;
+  if (!room || !room.hostToken) return false;
+  const cookieToken = req.cookies.jam_host_token;
+  const headerToken = req.headers['x-host-token'] || req.query.hostToken;
+  return cookieToken === room.hostToken || headerToken === room.hostToken;
+}
+
+function hostAuthMiddleware(req, res, next) {
+  if (isHostRequest(req)) return next();
+  res.status(403).json({ error: 'Acceso no autorizado. Se requieren credenciales de anfitrión.' });
+}
+
+function verifyGuestToken(req, guestName) {
+  const token = req.headers['x-guest-token'];
+  return token && req.room.guestTokens[guestName] === token;
+}
+
+function invalidatePlaybackCache(room) {
+  room.lastSpotifyFetchTime = 0;
+}
+
+/* ==========================================================================
+   RUTAS DE AUTENTICACIÓN (OAuth — sin roomId, crean la sala)
+   ========================================================================== */
+
 app.get('/api/auth/login', (req, res) => {
   const scopes = [
     'user-read-playback-state',
@@ -254,7 +237,7 @@ app.get('/api/auth/login', (req, res) => {
     'user-read-private'
   ].join(' ');
 
-  const spotifyAuthUrl = 'https://accounts.spotify.com/authorize?' + 
+  const spotifyAuthUrl = 'https://accounts.spotify.com/authorize?' +
     new URLSearchParams({
       response_type: 'code',
       client_id: process.env.SPOTIFY_CLIENT_ID,
@@ -266,12 +249,9 @@ app.get('/api/auth/login', (req, res) => {
   res.redirect(spotifyAuthUrl);
 });
 
-// 2. Callback de redirección de Spotify
 app.get('/api/callback', async (req, res) => {
   const code = req.query.code || null;
-  if (!code) {
-    return res.redirect('/?error=state_mismatch');
-  }
+  if (!code) return res.redirect('/?error=state_mismatch');
 
   const authHeader = Buffer.from(
     `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
@@ -293,400 +273,377 @@ app.get('/api/callback', async (req, res) => {
     });
 
     const data = await response.json();
-
     if (!response.ok) {
-      console.error('[Error Callback] Falló el intercambio de código:', data);
+      console.error('[Error Callback]', data);
       return res.redirect('/?error=token_exchange_failed');
     }
 
-    const expiresAt = Date.now() + data.expires_in * 1000;
-    const hostName = await fetchHostProfileName(data.access_token);
-    saveTokens({
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt,
-      hostToken: HOST_TOKEN,
-      hostName: hostName || 'Anfitrión'
+    // Crear sala nueva con UUID
+    const roomId = crypto.randomUUID();
+    const room = getOrCreateRoomState(roomId);
+
+    room.accessToken = data.access_token;
+    room.refreshToken = data.refresh_token;
+    room.expiresAt = Date.now() + data.expires_in * 1000;
+    room.hostToken = crypto.randomBytes(16).toString('hex');
+
+    const [spotifyId, hostName] = await Promise.all([
+      fetchHostSpotifyId(room.accessToken),
+      fetchHostProfileName(room.accessToken)
+    ]);
+    room.hostSpotifyId = spotifyId || '';
+    room.hostName = hostName || 'Anfitrión';
+
+    await db.saveRoom(roomId, {
+      hostSpotifyId: room.hostSpotifyId,
+      hostName: room.hostName,
+      hostToken: room.hostToken,
+      accessToken: room.accessToken,
+      refreshToken: room.refreshToken,
+      expiresAt: room.expiresAt,
+      jamQueue: room.jamQueue,
+      jamHistory: room.jamHistory,
+      pendingGuests: room.pendingGuests,
+      guestTokens: room.guestTokens
     });
 
-    // En producción: cookie HttpOnly + redirect a raíz
-    // En desarrollo: token en el fragmento de URL (no viaja al servidor, solo lo lee el JS del host)
+    console.log(`[Auth] Sala creada: ${roomId} para host: ${room.hostName}`);
+
     if (process.env.NODE_ENV === 'production') {
-      res.cookie('jam_host_token', HOST_TOKEN, {
+      res.cookie('jam_host_token', room.hostToken, {
         httpOnly: true,
         secure: true,
         sameSite: 'strict',
         maxAge: 30 * 24 * 60 * 60 * 1000
       });
-      res.redirect('/');
+      res.redirect(`/?roomId=${roomId}`);
     } else {
-      res.redirect(`http://localhost:5173/#host_token=${HOST_TOKEN}`);
+      res.redirect(`http://localhost:5173/?roomId=${roomId}#host_token=${room.hostToken}`);
     }
   } catch (error) {
-    console.error('[Error Callback] Error en el intercambio:', error);
+    console.error('[Error Callback]', error);
     res.redirect('/?error=internal_server_error');
   }
 });
 
-// 3. Estado de autenticación del host
-app.get('/api/auth/status', (req, res) => {
+/* ==========================================================================
+   RUTAS DE SALA — /api/rooms/:roomId/...
+   ========================================================================== */
+
+// Estado de autenticación
+app.get('/api/rooms/:roomId/auth/status', roomMiddleware, (req, res) => {
+  const room = req.room;
   res.json({
-    isAuthenticated: !!spotifyTokens.accessToken,
-    expiresAt: spotifyTokens.expiresAt
+    isAuthenticated: !!room.accessToken,
+    expiresAt: room.expiresAt,
+    hostName: room.hostName
   });
 });
 
-// 3.5. Obtener token de acceso para el SDK de reproducción web (solo el host verificado)
-app.get('/api/auth/token', hostAuthMiddleware, async (req, res) => {
+// Token de acceso de Spotify (solo host, para el Web Playback SDK)
+app.get('/api/rooms/:roomId/auth/token', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(req.room);
     res.json({ accessToken: token });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 4. Cerrar sesión
-app.post('/api/auth/logout', (req, res) => {
-  spotifyTokens = { accessToken: null, refreshToken: null, expiresAt: null };
+// Cerrar sesión
+app.post('/api/rooms/:roomId/auth/logout', roomMiddleware, hostAuthMiddleware, (req, res) => {
+  const { roomId, room } = req;
+  room.accessToken = null;
+  room.refreshToken = null;
+  room.expiresAt = null;
   res.clearCookie('jam_host_token');
-  if (fs.existsSync(TOKENS_FILE)) {
-    try {
-      fs.unlinkSync(TOKENS_FILE);
-      console.log('[Auth] Tokens borrados del disco.');
-    } catch (e) {
-      console.error('[Error] No se pudo borrar el archivo de tokens:', e);
-    }
-  }
+  db.deleteRoom(roomId).catch(() => {});
+  rooms.delete(roomId);
+  console.log(`[Auth] Sala ${roomId} cerrada.`);
   res.json({ success: true });
 });
 
-// 4.5. Restablecer datos y base de datos local (Host)
-app.post('/api/admin/reset', hostAuthMiddleware, (req, res) => {
-  console.log('[Admin] Solicitud de restablecimiento de datos recibida de Host.');
-  
-  // Limpiar variables del servidor
-  jamQueue = [];
-  jamHistory = [];
-  activeUsers = {};
-  pendingGuests = {};
-  currentTrackState = null;
-  cachedSpotifyPlayback = null;
-  lastSpotifyFetchTime = 0;
-  
-  // Eliminar archivos de estado y tokens
-  if (fs.existsSync(STATE_FILE)) {
-    try {
-      fs.unlinkSync(STATE_FILE);
-      console.log('[Admin] Archivo de estado jam_state.json borrado.');
-    } catch (e) {
-      console.error('[Error] No se pudo borrar jam_state.json:', e);
-    }
-  }
-
-  if (fs.existsSync(TOKENS_FILE)) {
-    try {
-      fs.unlinkSync(TOKENS_FILE);
-      spotifyTokens = { accessToken: null, refreshToken: null, expiresAt: null };
-      console.log('[Admin] Archivo de tokens tokens.json borrado.');
-    } catch (e) {
-      console.error('[Error] No se pudo borrar tokens.json:', e);
-    }
-  }
-
+// Restablecer sala
+app.post('/api/rooms/:roomId/admin/reset', roomMiddleware, hostAuthMiddleware, async (req, res) => {
+  const { roomId } = req;
+  console.log(`[Admin] Restableciendo sala ${roomId}`);
+  await db.deleteRoom(roomId);
+  rooms.delete(roomId);
+  res.clearCookie('jam_host_token');
   res.json({ success: true });
+});
+
+// Información de red (para QR y compartir enlace)
+app.get('/api/rooms/:roomId/info', roomMiddleware, (req, res) => {
+  const { roomId, room } = req;
+  const joinUrl = `${baseUrl}?roomId=${roomId}&mode=guest`;
+  res.json({
+    localIp,
+    port: PORT,
+    joinUrl,
+    hostName: room.hostName || 'Anfitrión',
+    roomId
+  });
 });
 
 /* ==========================================================================
-   RUTAS DE SEGURIDAD Y CONTROL DE ACCESO (INVITADOS)
+   RUTAS DE INVITADOS
    ========================================================================== */
 
-// 1. Unirse como invitado (Solicitud de acceso)
-app.post('/api/guest/join', (req, res) => {
+app.post('/api/rooms/:roomId/guest/join', roomMiddleware, (req, res) => {
   const { name } = req.body;
   if (!name || name.trim() === '') {
     return res.status(400).json({ error: 'Nombre de usuario requerido.' });
   }
+
   const cleanName = name.trim();
 
-  // Asegurar que el invitado tenga un token de sesión
-  if (!guestTokens[cleanName]) {
-    guestTokens[cleanName] = crypto.randomBytes(16).toString('hex');
+  if (cleanName.length < 2 || cleanName.length > 30) {
+    return res.status(400).json({ error: 'El nombre debe tener entre 2 y 30 caracteres.' });
+  }
+  if (!/^[\w\s\-\.áéíóúÁÉÍÓÚñÑüÜ]+$/.test(cleanName)) {
+    return res.status(400).json({ error: 'El nombre contiene caracteres no permitidos.' });
   }
 
-  // Si ya estaba aprobado
-  if (pendingGuests[cleanName] === 'approved') {
-    activeUsers[cleanName] = Date.now();
-    return res.json({ status: 'approved', guestToken: guestTokens[cleanName] });
+  const room = req.room;
+
+  if (!room.guestTokens[cleanName]) {
+    room.guestTokens[cleanName] = crypto.randomBytes(16).toString('hex');
   }
 
-  // Si está rechazado, permitir re-solicitar reiniciando a pending
-  if (pendingGuests[cleanName] === 'rejected') {
-    pendingGuests[cleanName] = 'pending';
-    console.log(`[Security] Invitado rechazado re-solicita acceso: ${cleanName}`);
-    saveJamState();
-    return res.json({ status: 'pending', guestToken: guestTokens[cleanName] });
+  if (room.pendingGuests[cleanName] === 'approved') {
+    room.activeUsers[cleanName] = Date.now();
+    return res.json({ status: 'approved', guestToken: room.guestTokens[cleanName] });
   }
 
-  // De lo contrario, iniciar solicitud o mantener estado 'pending'
-  if (!pendingGuests[cleanName]) {
-    pendingGuests[cleanName] = 'pending';
-    console.log(`[Security] Nueva solicitud de acceso de invitado: ${cleanName}`);
-    saveJamState();
+  if (room.pendingGuests[cleanName] === 'rejected') {
+    room.pendingGuests[cleanName] = 'pending';
+    persistRoom(req.roomId);
+    return res.json({ status: 'pending', guestToken: room.guestTokens[cleanName] });
   }
 
-  res.json({ status: pendingGuests[cleanName], guestToken: guestTokens[cleanName] });
+  if (!room.pendingGuests[cleanName]) {
+    room.pendingGuests[cleanName] = 'pending';
+    console.log(`[Guest] Nueva solicitud: ${cleanName} en sala ${req.roomId}`);
+    persistRoom(req.roomId);
+  }
+
+  res.json({ status: room.pendingGuests[cleanName], guestToken: room.guestTokens[cleanName] });
 });
 
-// 2. Consultar estado de aprobación del invitado
-app.get('/api/guest/status', (req, res) => {
+app.get('/api/rooms/:roomId/guest/status', roomMiddleware, (req, res) => {
   const { name } = req.query;
-  if (!name) {
-    return res.status(400).json({ error: 'Falta parámetro name.' });
-  }
+  if (!name) return res.status(400).json({ error: 'Falta parámetro name.' });
+
   const cleanName = name.trim();
-  const status = pendingGuests[cleanName] || 'not_requested';
+  const room = req.room;
+  const status = room.pendingGuests[cleanName] || 'not_requested';
 
   if (status === 'approved') {
-    activeUsers[cleanName] = Date.now();
+    room.activeUsers[cleanName] = Date.now();
   }
 
   res.json({ status });
 });
 
-// 3. Obtener lista de solicitudes pendientes y rechazadas/aprobadas
-app.get('/api/guest/pending', (req, res) => {
-  const pending = Object.keys(pendingGuests)
-    .filter(name => pendingGuests[name] === 'pending')
+app.get('/api/rooms/:roomId/guest/pending', roomMiddleware, hostAuthMiddleware, (req, res) => {
+  const pending = Object.keys(req.room.pendingGuests)
+    .filter(name => req.room.pendingGuests[name] === 'pending')
     .map(name => ({ name }));
   res.json(pending);
 });
 
-// 4. Aprobar/Rechazar solicitud
-app.post('/api/guest/approve', hostAuthMiddleware, (req, res) => {
-  const { name, action } = req.body; // action: 'approve' | 'reject'
-  if (!name || !action) {
-    return res.status(400).json({ error: 'Faltan parámetros name y action.' });
-  }
+app.post('/api/rooms/:roomId/guest/approve', roomMiddleware, hostAuthMiddleware, (req, res) => {
+  const { name, action } = req.body;
+  if (!name || !action) return res.status(400).json({ error: 'Faltan parámetros name y action.' });
+
   const cleanName = name.trim();
+  const room = req.room;
 
   if (action === 'approve') {
-    pendingGuests[cleanName] = 'approved';
-    activeUsers[cleanName] = Date.now();
-    console.log(`[Security] Invitado aprobado por el Host: ${cleanName}`);
+    room.pendingGuests[cleanName] = 'approved';
+    room.activeUsers[cleanName] = Date.now();
+    console.log(`[Guest] Aprobado: ${cleanName}`);
   } else if (action === 'reject') {
-    pendingGuests[cleanName] = 'rejected';
-    delete activeUsers[cleanName];
-    console.log(`[Security] Invitado rechazado por el Host: ${cleanName}`);
+    room.pendingGuests[cleanName] = 'rejected';
+    delete room.activeUsers[cleanName];
+    console.log(`[Guest] Rechazado: ${cleanName}`);
   } else {
     return res.status(400).json({ error: 'Acción no válida.' });
   }
 
-  saveJamState();
-  invalidatePlaybackCache();
-  res.json({ success: true, pendingGuests });
+  persistRoom(req.roomId);
+  invalidatePlaybackCache(room);
+  res.json({ success: true });
 });
 
 /* ==========================================================================
-   RUTAS DE INFORMACIÓN DE RED
+   RUTAS DE PLAYBACK
    ========================================================================== */
 
-app.get('/api/info', (req, res) => {
-  res.json({
-    localIp,
-    port: PORT,
-    joinUrl,
-    hostName: spotifyTokens.hostName || 'Anfitrión'
-  });
-});
-
-/* ==========================================================================
-   RUTAS DEL REPRODUCTOR Y PLAYBACK
-   ========================================================================== */
-
-// 1. Obtener estado del reproductor actual (Dispositivos + Cola + Canción actual)
-app.get('/api/playback', async (req, res) => {
-  // Registrar actividad del invitado (si se proporciona su nombre en el polling y está aprobado)
+app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
+  const room = req.room;
   const { guestName } = req.query;
+
+  // Registrar actividad del invitado
   if (guestName && guestName.trim()) {
     const cleanName = guestName.trim();
-    if (cleanName === 'Host' || cleanName === 'Anfitrión' || pendingGuests[cleanName] === 'approved') {
-      activeUsers[cleanName] = Date.now();
+    if (cleanName === 'Host' || cleanName === 'Anfitrión' || room.pendingGuests[cleanName] === 'approved') {
+      room.activeUsers[cleanName] = Date.now();
     }
   }
 
-  // Limpiar usuarios inactivos (más de 10 segundos sin responder)
+  // Limpiar usuarios inactivos (>10 s sin responder)
   const now = Date.now();
-  for (const name in activeUsers) {
-    if (now - activeUsers[name] > 10000) {
-      delete activeUsers[name];
-    }
+  for (const name in room.activeUsers) {
+    if (now - room.activeUsers[name] > 10000) delete room.activeUsers[name];
   }
 
   try {
     const nowTime = Date.now();
-    
-    // Si la caché expiró (más de 1.5 segundos), consultamos a Spotify
-    if (!cachedSpotifyPlayback || (nowTime - lastSpotifyFetchTime > 1500)) {
-      const token = await getValidAccessToken();
+    const cacheExpired = !room.cachedSpotifyPlayback || (nowTime - room.lastSpotifyFetchTime > 1500);
 
-      // 1. Obtener canción actual
-      const playbackResponse = await fetch('https://api.spotify.com/v1/me/player', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+    if (cacheExpired && !room.spotifyFetchPromise) {
+      // Solo un fetch simultáneo por sala — las demás requests esperan a esta promesa
+      room.spotifyFetchPromise = (async () => {
+        const token = await getValidRoomToken(room);
 
-      let activeDevice = null;
-      let currentlyPlaying = null;
+        const playbackResponse = await fetch('https://api.spotify.com/v1/me/player', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-      if (playbackResponse.status === 200) {
-        const data = await playbackResponse.json();
-        activeDevice = data.device;
-        
-        // Auto-desactivar repetición si está activo para asegurar flujo de cola colaborativa
-        if (data.repeat_state && data.repeat_state !== 'off') {
-          console.log(`[Playback] Detectado modo de repetición: ${data.repeat_state}. Desactivándolo para asegurar flujo de cola...`);
-          fetch(`https://api.spotify.com/v1/me/player/repeat?state=off`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
-          }).catch(err => console.error('[Error Repeat] No se pudo desactivar repetición:', err));
-        }
-        
-        if (data.item) {
-          currentlyPlaying = {
-            id: data.item.id,
-            uri: data.item.uri,
-            name: data.item.name,
-            artists: data.item.artists.map(a => a.name).join(', '),
-            albumArt: data.item.album?.images?.[0]?.url || '',
-            durationMs: data.item.duration_ms,
-            progressMs: data.progress_ms,
-            isPlaying: data.is_playing
-          };
-          
-          // Si cambió la canción en reproducción
-          if (currentTrackState && currentTrackState.id !== currentlyPlaying.id) {
-            // Si el cambio fue provocado por /api/playback/next, no es una desviación
-            const isForcedTransition = (lastForcedUri !== null && lastForcedUri === currentlyPlaying.uri);
-            if (isForcedTransition) {
-              lastForcedUri = null;
-            }
+        let activeDevice = null;
+        let currentlyPlaying = null;
 
-            // Si hay canciones en cola, verificar si se desvió de lo esperado
-            // (omitir la comprobación en transiciones forzadas por el host)
-            if (jamQueue.length > 0 && !isForcedTransition) {
-              const nextExpectedTrack = jamQueue[0];
-              if (currentlyPlaying.uri !== nextExpectedTrack.uri) {
-                console.log(`[Queue Sync] Desviación detectada. Sonando: ${currentlyPlaying.name}, Esperada: ${nextExpectedTrack.name}. Redirigiendo reproducción...`);
+        if (playbackResponse.status === 200) {
+          const data = await playbackResponse.json();
+          activeDevice = data.device;
 
-                // Forzar reproducción de la canción esperada de nuestra cola
-                fetch('https://api.spotify.com/v1/me/player/play', {
-                  method: 'PUT',
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({ uris: [nextExpectedTrack.uri] })
-                }).catch(err => console.error('[Queue Sync Error] Falló redirección:', err));
-
-                currentTrackState = currentlyPlaying;
-                cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
-                lastSpotifyFetchTime = Date.now();
-                return res.json({
-                  currentlyPlaying,
-                  activeDevice,
-                  queue: jamQueue,
-                  history: jamHistory,
-                  users: Object.keys(activeUsers)
-                });
-              }
-            }
-
-            // Flujo normal: guardar en el historial la canción anterior
-            const matchedItem = jamQueue.find(item => item.uri === currentTrackState.uri) || 
-                                jamHistory.find(item => item.uri === currentTrackState.uri);
-            const addedBy = matchedItem ? matchedItem.addedBy : 'Sistema / Spotify';
-
-            if (jamHistory.length === 0 || jamHistory[0].uri !== currentTrackState.uri) {
-              jamHistory.unshift({
-                id: `${currentTrackState.uri}-${Date.now()}`,
-                uri: currentTrackState.uri,
-                name: currentTrackState.name,
-                artists: currentTrackState.artists,
-                albumArt: currentTrackState.albumArt,
-                addedBy,
-                playedAt: Date.now()
-              });
-              if (jamHistory.length > 30) {
-                jamHistory.pop();
-              }
-              saveJamState();
-            }
-
-            // Auto-sincronización de la cola
-            const index = jamQueue.findIndex(item => item.uri === currentlyPlaying.uri);
-            if (index !== -1) {
-              console.log(`[Queue Sync] Nueva canción detectada en reproducción. Limpiando cola local hasta el índice ${index}: ${jamQueue[index].name}`);
-              jamQueue = jamQueue.slice(index + 1);
-              saveJamState();
-            }
-          } else if (!currentTrackState) {
-            // Carga inicial
-            if (jamQueue.length > 0 && jamQueue[0].uri === currentlyPlaying.uri) {
-              console.log(`[Queue Sync] Carga inicial: canción en reproducción detectada en el tope de la cola. Removiendo: ${jamQueue[0].name}`);
-              jamQueue = jamQueue.slice(1);
-              saveJamState();
-            }
+          // Desactivar repetición si está activa
+          if (data.repeat_state && data.repeat_state !== 'off') {
+            fetch('https://api.spotify.com/v1/me/player/repeat?state=off', {
+              method: 'PUT',
+              headers: { 'Authorization': `Bearer ${token}` }
+            }).catch(() => {});
           }
-          
-          currentTrackState = currentlyPlaying;
-        }
-      } else if (playbackResponse.status === 204 || (currentlyPlaying && !currentlyPlaying.isPlaying)) {
-        // Si no está reproduciendo o regresó 204, y teníamos una canción sonando que estaba por terminar
-        const wasNearEnd = currentTrackState && (currentTrackState.durationMs - currentTrackState.progressMs < 5000);
-        
-        if ((playbackResponse.status === 204 || wasNearEnd) && jamQueue.length > 0) {
-          const nextTrack = jamQueue[0];
-          console.log(`[Queue Sync] El reproductor se detuvo o terminó la canción. Iniciando la siguiente de la cola: ${nextTrack.name}`);
-          
-          fetch('https://api.spotify.com/v1/me/player/play', {
-            method: 'PUT',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ uris: [nextTrack.uri] })
-          }).catch(err => console.error('[Queue Sync Error] Falló reproducción automática:', err));
-        }
-        currentTrackState = null;
-      }
 
-      cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
-      lastSpotifyFetchTime = Date.now();
+          if (data.item) {
+            currentlyPlaying = {
+              id: data.item.id,
+              uri: data.item.uri,
+              name: data.item.name,
+              artists: data.item.artists.map(a => a.name).join(', '),
+              albumArt: data.item.album?.images?.[0]?.url || '',
+              durationMs: data.item.duration_ms,
+              progressMs: data.progress_ms,
+              isPlaying: data.is_playing
+            };
+
+            if (room.currentTrackState && room.currentTrackState.id !== currentlyPlaying.id) {
+              const isForcedTransition = room.lastForcedUri !== null && room.lastForcedUri === currentlyPlaying.uri;
+              if (isForcedTransition) room.lastForcedUri = null;
+
+              if (room.jamQueue.length > 0 && !isForcedTransition) {
+                const nextExpected = room.jamQueue[0];
+                if (currentlyPlaying.uri !== nextExpected.uri) {
+                  console.log(`[Queue Sync] Desviación detectada en sala ${req.roomId}. Redirigiendo a: ${nextExpected.name}`);
+                  fetch('https://api.spotify.com/v1/me/player/play', {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uris: [nextExpected.uri] })
+                  }).catch(() => {});
+
+                  room.currentTrackState = currentlyPlaying;
+                  room.cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
+                  room.lastSpotifyFetchTime = Date.now();
+                  room.spotifyFetchPromise = null;
+                  return;
+                }
+              }
+
+              // Flujo normal: guardar en historial la canción anterior
+              const matchedItem = room.jamQueue.find(i => i.uri === room.currentTrackState.uri) ||
+                                  room.jamHistory.find(i => i.uri === room.currentTrackState.uri);
+              const addedBy = matchedItem ? matchedItem.addedBy : 'Sistema / Spotify';
+
+              if (room.jamHistory.length === 0 || room.jamHistory[0].uri !== room.currentTrackState.uri) {
+                room.jamHistory.unshift({
+                  id: `${room.currentTrackState.uri}-${Date.now()}`,
+                  uri: room.currentTrackState.uri,
+                  name: room.currentTrackState.name,
+                  artists: room.currentTrackState.artists,
+                  albumArt: room.currentTrackState.albumArt,
+                  addedBy,
+                  playedAt: Date.now()
+                });
+                if (room.jamHistory.length > 30) room.jamHistory.pop();
+                persistRoom(req.roomId);
+              }
+
+              // Sincronizar cola: eliminar hasta la canción actual
+              const idx = room.jamQueue.findIndex(i => i.uri === currentlyPlaying.uri);
+              if (idx !== -1) {
+                console.log(`[Queue Sync] Sala ${req.roomId}: avanzando cola al índice ${idx}`);
+                room.jamQueue = room.jamQueue.slice(idx + 1);
+                persistRoom(req.roomId);
+              }
+            } else if (!room.currentTrackState) {
+              // Carga inicial
+              if (room.jamQueue.length > 0 && room.jamQueue[0].uri === currentlyPlaying.uri) {
+                room.jamQueue = room.jamQueue.slice(1);
+                persistRoom(req.roomId);
+              }
+            }
+
+            room.currentTrackState = currentlyPlaying;
+          }
+        } else if (playbackResponse.status === 204 || (currentlyPlaying && !currentlyPlaying.isPlaying)) {
+          const wasNearEnd = room.currentTrackState &&
+            (room.currentTrackState.durationMs - room.currentTrackState.progressMs < 5000);
+
+          if ((playbackResponse.status === 204 || wasNearEnd) && room.jamQueue.length > 0) {
+            const nextTrack = room.jamQueue[0];
+            console.log(`[Queue Sync] Sala ${req.roomId}: reproduciendo siguiente de cola: ${nextTrack.name}`);
+            fetch('https://api.spotify.com/v1/me/player/play', {
+              method: 'PUT',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uris: [nextTrack.uri] })
+            }).catch(() => {});
+          }
+          room.currentTrackState = null;
+        }
+
+        room.cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
+        room.lastSpotifyFetchTime = Date.now();
+      })()
+        .catch(err => { console.error(`[Playback] Error sala ${req.roomId}:`, err.message); })
+        .finally(() => { room.spotifyFetchPromise = null; });
+    }
+
+    // Si hay un fetch en curso, esperarlo antes de responder
+    if (room.spotifyFetchPromise) {
+      await room.spotifyFetchPromise;
     }
 
     res.json({
-      currentlyPlaying: cachedSpotifyPlayback ? cachedSpotifyPlayback.currentlyPlaying : null,
-      activeDevice: cachedSpotifyPlayback ? cachedSpotifyPlayback.activeDevice : null,
-      queue: jamQueue,
-      history: jamHistory,
-      users: Object.keys(activeUsers)
+      currentlyPlaying: room.cachedSpotifyPlayback?.currentlyPlaying ?? null,
+      activeDevice: room.cachedSpotifyPlayback?.activeDevice ?? null,
+      queue: room.jamQueue,
+      history: room.jamHistory,
+      users: Object.keys(room.activeUsers)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 2. Obtener lista de dispositivos
-app.get('/api/playback/devices', async (req, res) => {
+app.get('/api/rooms/:roomId/playback/devices', roomMiddleware, async (req, res) => {
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!response.ok) {
-      console.warn('[Devices Fetch] Spotify regresó estado no exitoso:', response.status);
-      return res.json([]);
-    }
+    if (!response.ok) return res.json([]);
     const data = await response.json().catch(() => ({}));
     res.json(data.devices || []);
   } catch (error) {
@@ -694,207 +651,161 @@ app.get('/api/playback/devices', async (req, res) => {
   }
 });
 
-// 3. Transferir reproducción a un dispositivo
-app.post('/api/playback/transfer', hostAuthMiddleware, async (req, res) => {
+app.post('/api/rooms/:roomId/playback/transfer', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   const { deviceId } = req.body;
-  if (!deviceId) {
-    return res.status(400).json({ error: 'Falta deviceId' });
-  }
-
+  if (!deviceId) return res.status(400).json({ error: 'Falta deviceId' });
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player', {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        device_ids: [deviceId],
-        play: true
-      })
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_ids: [deviceId], play: true })
     });
-
     if (response.ok || response.status === 204) {
-      invalidatePlaybackCache();
-      res.json({ success: true });
-    } else {
-      const errData = await response.json().catch(() => ({}));
-      res.status(response.status).json(errData);
+      invalidatePlaybackCache(req.room);
+      return res.json({ success: true });
     }
+    const err = await response.json().catch(() => ({}));
+    res.status(response.status).json(err);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 4. Pausar
-app.put('/api/playback/pause', hostAuthMiddleware, async (req, res) => {
+app.put('/api/rooms/:roomId/playback/pause', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player/pause', {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    
-    // Spotify devuelve 204 No Content en caso de éxito
     if (response.status === 204 || response.ok) {
-      invalidatePlaybackCache();
-      res.json({ success: true });
-    } else {
-      const err = await response.json().catch(() => ({}));
-      res.status(response.status).json(err);
+      invalidatePlaybackCache(req.room);
+      return res.json({ success: true });
     }
+    const err = await response.json().catch(() => ({}));
+    res.status(response.status).json(err);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 5. Reproducir (admite uris opcionales en el body)
-app.put('/api/playback/play', hostAuthMiddleware, async (req, res) => {
+app.put('/api/rooms/:roomId/playback/play', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   const { uris } = req.body || {};
   try {
-    const token = await getValidAccessToken();
-    const options = {
-      method: 'PUT',
-      headers: { 'Authorization': `Bearer ${token}` }
-    };
-    
+    const token = await getValidRoomToken(req.room);
+    const options = { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } };
     if (uris && Array.isArray(uris)) {
       options.headers['Content-Type'] = 'application/json';
       options.body = JSON.stringify({ uris });
     }
-
     const response = await fetch('https://api.spotify.com/v1/me/player/play', options);
-    
     if (response.status === 204 || response.ok) {
-      invalidatePlaybackCache();
-      res.json({ success: true });
-    } else {
-      const err = await response.json().catch(() => ({}));
-      res.status(response.status).json(err);
+      invalidatePlaybackCache(req.room);
+      return res.json({ success: true });
     }
+    const err = await response.json().catch(() => ({}));
+    res.status(response.status).json(err);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 6. Siguiente canción (Saltar)
-app.post('/api/playback/next', hostAuthMiddleware, async (req, res) => {
+app.post('/api/rooms/:roomId/playback/next', roomMiddleware, hostAuthMiddleware, async (req, res) => {
+  const room = req.room;
   try {
-    const token = await getValidAccessToken();
-    
-    if (jamQueue.length > 0) {
-      const nextTrack = jamQueue[0];
-      console.log(`[Playback Next] Forzando reproducción de la primera canción de la cola: ${nextTrack.name}`);
-      
+    const token = await getValidRoomToken(room);
+
+    if (room.jamQueue.length > 0) {
+      const nextTrack = room.jamQueue[0];
       const response = await fetch('https://api.spotify.com/v1/me/player/play', {
         method: 'PUT',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ uris: [nextTrack.uri] })
       });
-      
+
       if (response.status === 204 || response.ok) {
-        // Agregar al historial la canción que se está saltando (la actual), no la siguiente
-        if (currentTrackState) {
-          const matchedQueueItem = jamQueue.find(i => i.uri === currentTrackState.uri);
-          const prevAddedBy = matchedQueueItem
-            ? matchedQueueItem.addedBy
-            : (jamHistory.find(i => i.uri === currentTrackState.uri)?.addedBy || 'Sistema / Spotify');
-          if (jamHistory.length === 0 || jamHistory[0].uri !== currentTrackState.uri) {
-            jamHistory.unshift({
-              id: `${currentTrackState.uri}-${Date.now()}`,
-              uri: currentTrackState.uri,
-              name: currentTrackState.name,
-              artists: currentTrackState.artists,
-              albumArt: currentTrackState.albumArt,
-              addedBy: prevAddedBy,
+        // Agregar al historial la canción que se está saltando (la actual)
+        if (room.currentTrackState) {
+          const matchedItem = room.jamQueue.find(i => i.uri === room.currentTrackState.uri);
+          const addedBy = matchedItem
+            ? matchedItem.addedBy
+            : (room.jamHistory.find(i => i.uri === room.currentTrackState.uri)?.addedBy || 'Sistema / Spotify');
+          if (room.jamHistory.length === 0 || room.jamHistory[0].uri !== room.currentTrackState.uri) {
+            room.jamHistory.unshift({
+              id: `${room.currentTrackState.uri}-${Date.now()}`,
+              uri: room.currentTrackState.uri,
+              name: room.currentTrackState.name,
+              artists: room.currentTrackState.artists,
+              albumArt: room.currentTrackState.albumArt,
+              addedBy,
               playedAt: Date.now()
             });
-            if (jamHistory.length > 30) jamHistory.pop();
+            if (room.jamHistory.length > 30) room.jamHistory.pop();
           }
         }
-        // Remover la siguiente canción de la cola y registrarla como transición forzada
-        jamQueue.shift();
-        lastForcedUri = nextTrack.uri;
-        saveJamState();
-        invalidatePlaybackCache();
-        return res.json({ success: true, queue: jamQueue, history: jamHistory });
-      } else {
-        const err = await response.json().catch(() => ({}));
-        return res.status(response.status).json(err);
+        room.jamQueue.shift();
+        room.lastForcedUri = nextTrack.uri;
+        persistRoom(req.roomId);
+        invalidatePlaybackCache(room);
+        return res.json({ success: true, queue: room.jamQueue, history: room.jamHistory });
       }
+      const err = await response.json().catch(() => ({}));
+      return res.status(response.status).json(err);
     } else {
-      // Si la cola está vacía, hacer el skip normal
       const response = await fetch('https://api.spotify.com/v1/me/player/next', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
       if (response.status === 204 || response.ok) {
-        invalidatePlaybackCache();
+        invalidatePlaybackCache(room);
         return res.json({ success: true });
-      } else {
-        const err = await response.json().catch(() => ({}));
-        return res.status(response.status).json(err);
       }
+      const err = await response.json().catch(() => ({}));
+      return res.status(response.status).json(err);
     }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 7. Canción anterior (Regresar)
-app.post('/api/playback/previous', hostAuthMiddleware, async (req, res) => {
+app.post('/api/rooms/:roomId/playback/previous', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player/previous', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    
     if (response.status === 204 || response.ok) {
-      invalidatePlaybackCache();
-      res.json({ success: true });
-    } else {
-      const err = await response.json().catch(() => ({}));
-      res.status(response.status).json(err);
+      invalidatePlaybackCache(req.room);
+      return res.json({ success: true });
     }
+    const err = await response.json().catch(() => ({}));
+    res.status(response.status).json(err);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 8. Buscar/Avanzar/Retroceder en la canción actual (Seek)
-app.post('/api/playback/seek', hostAuthMiddleware, async (req, res) => {
+app.post('/api/rooms/:roomId/playback/seek', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   let { positionMs, relativeMs } = req.body;
   try {
-    const token = await getValidAccessToken();
-    
-    // Si se pasa una posición relativa (ej: -15000 para retroceder 15s)
+    const token = await getValidRoomToken(req.room);
+
     if (relativeMs !== undefined) {
       const playResponse = await fetch('https://api.spotify.com/v1/me/player', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (playResponse.status === 200) {
         const data = await playResponse.json();
-        const currentProgress = data.progress_ms || 0;
-        positionMs = Math.max(0, currentProgress + relativeMs);
-        
-        // No avanzar más allá del total de la canción
-        if (data.item && positionMs > data.item.duration_ms) {
-          positionMs = data.item.duration_ms - 1000;
-        }
+        positionMs = Math.max(0, (data.progress_ms || 0) + relativeMs);
+        if (data.item && positionMs > data.item.duration_ms) positionMs = data.item.duration_ms - 1000;
       } else {
-        return res.status(400).json({ error: 'No hay reproducción activa para ajustar la posición.' });
+        return res.status(400).json({ error: 'No hay reproducción activa.' });
       }
     }
-    
-    if (positionMs === undefined) {
-      return res.status(400).json({ error: 'Falta posición (positionMs).' });
-    }
+
+    if (positionMs === undefined) return res.status(400).json({ error: 'Falta posición (positionMs).' });
 
     const response = await fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${Math.round(positionMs)}`, {
       method: 'PUT',
@@ -902,80 +813,54 @@ app.post('/api/playback/seek', hostAuthMiddleware, async (req, res) => {
     });
 
     if (response.ok || response.status === 204) {
-      invalidatePlaybackCache();
-      res.json({ success: true, positionMs });
-    } else {
-      const err = await response.json().catch(() => ({}));
-      res.status(response.status).json(err);
+      invalidatePlaybackCache(req.room);
+      return res.json({ success: true, positionMs });
     }
+    const err = await response.json().catch(() => ({}));
+    res.status(response.status).json(err);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 9. Cambiar Volumen
-app.put('/api/playback/volume', hostAuthMiddleware, async (req, res) => {
+app.put('/api/rooms/:roomId/playback/volume', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   const { volumePercent } = req.body;
   if (volumePercent === undefined || volumePercent < 0 || volumePercent > 100) {
-    return res.status(400).json({ error: 'Volumen inválido. Debe estar entre 0 y 100.' });
+    return res.status(400).json({ error: 'Volumen inválido (0–100).' });
   }
-
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(req.room);
     const response = await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${volumePercent}`, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-
     if (response.ok || response.status === 204) {
-      invalidatePlaybackCache();
-      res.json({ success: true, volumePercent });
-    } else {
-      const err = await response.json().catch(() => ({}));
-      res.status(response.status).json(err);
+      invalidatePlaybackCache(req.room);
+      return res.json({ success: true, volumePercent });
     }
+    const err = await response.json().catch(() => ({}));
+    res.status(response.status).json(err);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Verificar que el token de invitado enviado coincida con el registrado para ese nombre
-function verifyGuestToken(req, guestName) {
-  const token = req.headers['x-guest-token'];
-  return token && guestTokens[guestName] === token;
-}
-
 /* ==========================================================================
-   RUTAS DE BÚSQUEDA Y GESTIÓN DE COLA (INVITADOS)
+   RUTAS DE BÚSQUEDA Y COLA
    ========================================================================== */
 
-// 1. Buscar canciones
-app.get('/api/search', async (req, res) => {
+app.get('/api/rooms/:roomId/search', roomMiddleware, async (req, res) => {
   const query = req.query.q;
-  if (!query) {
-    return res.json([]);
-  }
-
+  if (!query) return res.json([]);
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(req.room);
     const response = await fetch(
-      'https://api.spotify.com/v1/search?' + new URLSearchParams({
-        q: query,
-        type: 'track',
-        limit: 15
-      }).toString(),
-      {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }
+      'https://api.spotify.com/v1/search?' + new URLSearchParams({ q: query, type: 'track', limit: 15 }),
+      { headers: { 'Authorization': `Bearer ${token}` } }
     );
-
     const data = await response.json();
-    if (!response.ok) {
-      console.error('[Error Search] Falló búsqueda en Spotify:', data);
-      return res.status(response.status).json(data);
-    }
+    if (!response.ok) return res.status(response.status).json(data);
 
-    // Simplificar resultados
     const tracks = (data.tracks?.items || []).map(track => ({
       id: track.id,
       uri: track.uri,
@@ -984,38 +869,33 @@ app.get('/api/search', async (req, res) => {
       albumArt: track.album?.images?.[2]?.url || track.album?.images?.[0]?.url || '',
       durationMs: track.duration_ms
     }));
-
     res.json(tracks);
   } catch (error) {
-    console.error('[Error Search]', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 2. Agregar una canción a la cola
-app.post('/api/queue', async (req, res) => {
+app.get('/api/rooms/:roomId/queue', roomMiddleware, (req, res) => {
+  res.json(req.room.jamQueue);
+});
+
+app.post('/api/rooms/:roomId/queue', roomMiddleware, async (req, res) => {
   const { uri, name, artists, albumArt, addedBy } = req.body;
+  if (!uri) return res.status(400).json({ error: 'Falta URI de la canción.' });
 
-  if (!uri) {
-    return res.status(400).json({ error: 'Falta URI de la canción.' });
-  }
-
-  // No permitir canciones duplicadas en la cola local
-  const isDuplicate = jamQueue.some(item => item.uri === uri);
-  if (isDuplicate) {
-    return res.status(400).json({ error: 'Esta canción ya está en la cola de la sala.' });
-  }
+  const room = req.room;
+  const isDuplicate = room.jamQueue.some(item => item.uri === uri);
+  if (isDuplicate) return res.status(400).json({ error: 'Esta canción ya está en la cola.' });
 
   const guestName = addedBy ? addedBy.trim() : 'Anónimo';
   const isHost = isHostRequest(req);
 
-  // Validar si el invitado está aprobado por el Host antes de dejarlo encolar
   if (!isHost) {
     if (guestName === 'Host' || guestName === 'Anfitrión') {
-      return res.status(403).json({ error: 'Nombre de usuario reservado para el anfitrión.' });
+      return res.status(403).json({ error: 'Nombre reservado para el anfitrión.' });
     }
-    if (pendingGuests[guestName] !== 'approved') {
-      return res.status(403).json({ error: 'No tienes acceso autorizado por el anfitrión para agregar canciones.' });
+    if (room.pendingGuests[guestName] !== 'approved') {
+      return res.status(403).json({ error: 'No tienes acceso autorizado para agregar canciones.' });
     }
     if (!verifyGuestToken(req, guestName)) {
       return res.status(403).json({ error: 'Token de invitado inválido. Vuelve a unirte a la sala.' });
@@ -1023,9 +903,8 @@ app.post('/api/queue', async (req, res) => {
   }
 
   try {
-    const token = await getValidAccessToken();
+    const token = await getValidRoomToken(room);
 
-    // Consultar si hay reproducción activa para decidir si reproducir de inmediato
     const playbackCheck = await fetch('https://api.spotify.com/v1/me/player', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -1033,65 +912,52 @@ app.post('/api/queue', async (req, res) => {
     let isIdle = true;
     if (playbackCheck.status === 200) {
       const pbData = await playbackCheck.json();
-      if (pbData && pbData.item) {
-        isIdle = false;
-      }
+      if (pbData && pbData.item) isIdle = false;
     }
 
+    // Reservar slot en la cola ANTES del await a Spotify (evita race condition)
     const queueItem = {
       id: `${uri}-${Date.now()}`,
-      uri,
-      name,
-      artists,
-      albumArt,
+      uri, name, artists, albumArt,
       addedBy: guestName,
       addedAt: Date.now()
     };
+    room.jamQueue.push(queueItem);
 
-    // Si la cola local está vacía y el reproductor de Spotify está inactivo (idle), reproducir directamente
-    if (jamQueue.length === 0 && isIdle) {
-      console.log(`[Queue] Reproductor inactivo. Reproduciendo directamente la canción añadida: ${name}`);
+    if (room.jamQueue.length === 1 && isIdle) {
+      console.log(`[Queue] Sala ${req.roomId}: reproductor inactivo, reproduciendo directamente: ${name}`);
       const playResponse = await fetch('https://api.spotify.com/v1/me/player/play', {
         method: 'PUT',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ uris: [uri] })
       });
       if (!playResponse.ok && playResponse.status === 404) {
-        return res.status(404).json({ 
-          error: 'No se detecta reproducción activa. El anfitrión debe abrir Spotify y reproducir algo primero.' 
+        room.jamQueue.pop(); // revertir
+        return res.status(404).json({
+          error: 'No se detecta reproducción activa. El anfitrión debe abrir Spotify primero.'
         });
       }
-    } else {
-      console.log(`[Queue] Añadiendo a la cola colaborativa local (sin enviar a Spotify aún): ${name}`);
     }
 
-    jamQueue.push(queueItem);
-    saveJamState();
-    invalidatePlaybackCache();
-    res.json({ success: true, queue: jamQueue });
+    persistRoom(req.roomId);
+    invalidatePlaybackCache(room);
+    res.json({ success: true, queue: room.jamQueue });
   } catch (error) {
-    console.error('[Error Queue]', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 3. Eliminar una canción de la cola colaborativa (por ID)
-app.delete('/api/queue/:id', (req, res) => {
+app.delete('/api/rooms/:roomId/queue/:id', roomMiddleware, (req, res) => {
   const { id } = req.params;
   const { guestName } = req.query;
+  const room = req.room;
 
-  const index = jamQueue.findIndex(item => item.id === id);
-  if (index === -1) {
-    return res.status(404).json({ error: 'Canción no encontrada o no autorizada.' });
-  }
+  const index = room.jamQueue.findIndex(item => item.id === id);
+  if (index === -1) return res.status(404).json({ error: 'Canción no encontrada.' });
 
-  const item = jamQueue[index];
+  const item = room.jamQueue[index];
   const isHost = isHostRequest(req);
-  
-  // Si no es el host verificado, validar identidad y propiedad del invitado
+
   if (!isHost) {
     if (!guestName || guestName.trim() === '') {
       return res.status(403).json({ error: 'Identificación de invitado requerida.' });
@@ -1108,45 +974,42 @@ app.delete('/api/queue/:id', (req, res) => {
     }
   }
 
-  console.log(`[Queue Remove] Canción eliminada de la cola local: ${item.name} - ${item.artists} (por ${isHost ? 'Anfitrión' : guestName})`);
-  jamQueue.splice(index, 1);
-  saveJamState();
-  invalidatePlaybackCache();
-  res.json({ success: true, queue: jamQueue });
+  room.jamQueue.splice(index, 1);
+  persistRoom(req.roomId);
+  invalidatePlaybackCache(room);
+  res.json({ success: true, queue: room.jamQueue });
 });
 
-// 4. Reordenar la cola colaborativa (por el anfitrión)
-app.put('/api/queue/reorder', hostAuthMiddleware, (req, res) => {
+app.put('/api/rooms/:roomId/queue/reorder', roomMiddleware, hostAuthMiddleware, (req, res) => {
   const { newQueue } = req.body;
-  if (!Array.isArray(newQueue)) {
-    return res.status(400).json({ error: 'Cola de reproducción inválida.' });
-  }
+  if (!Array.isArray(newQueue)) return res.status(400).json({ error: 'Cola inválida.' });
 
-  // Actualizar jamQueue local en memoria con el nuevo orden
-  jamQueue = newQueue;
-  console.log('[Queue Reorder] La cola fue reordenada por el anfitrión.');
-  saveJamState();
-  invalidatePlaybackCache();
-  res.json({ success: true, queue: jamQueue });
+  req.room.jamQueue = newQueue;
+  persistRoom(req.roomId);
+  invalidatePlaybackCache(req.room);
+  res.json({ success: true, queue: req.room.jamQueue });
 });
 
-// 5. Obtener cola actual
-app.get('/api/queue', (req, res) => {
-  res.json(jamQueue);
-});
+/* ==========================================================================
+   CATCH-ALL: servir frontend en producción
+   ========================================================================== */
 
-// Redirigir cualquier otra petición al index.html en producción
 if (fs.existsSync(distPath)) {
   app.get('*', (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log('==================================================');
-  console.log(` JamSpotify Backend escuchando en el puerto ${PORT}`);
-  console.log(` Acceso local (Host): http://localhost:${PORT}`);
-  console.log(` Enlace para invitados: ${joinUrl}`);
-  console.log('==================================================');
+/* ==========================================================================
+   ARRANQUE
+   ========================================================================== */
+
+db.initSchema().then(() => {
+  app.listen(PORT, () => {
+    console.log('==================================================');
+    console.log(` JamSpotify Backend — puerto ${PORT}`);
+    console.log(` Acceso local: http://localhost:${PORT}`);
+    console.log(` IP de red:    http://${localIp}:${PORT}`);
+    console.log('==================================================');
+  });
 });

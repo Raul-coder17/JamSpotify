@@ -90,6 +90,8 @@ const Icons = {
 function App() {
   // Determinar modo (host vs guest) basado en URL query params
   const [appMode, setAppMode] = useState('choose'); // 'choose', 'host', 'guest'
+  // roomId se obtiene una vez de la URL y no cambia durante la sesión
+  const [roomId] = useState(() => new URLSearchParams(window.location.search).get('roomId'));
   const [guestName, setGuestName] = useState(localStorage.getItem('jam_guest_name') || '');
   const [showNickModal, setShowNickModal] = useState(false);
   const [nickInput, setNickInput] = useState('');
@@ -134,13 +136,21 @@ function App() {
   // Ref para barra de progreso
   const progressTimerRef = useRef(null);
 
+  // Helper: construye URLs de sala → /api/rooms/:roomId/<path>
+  const r = (path) => `/api/rooms/${roomId}${path}`;
+
   // Auto-detectar modo al iniciar
   useEffect(() => {
+    // Sin sala no hay nada que hacer
+    if (!roomId) {
+      setAppMode('choose');
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
 
-    // En desarrollo el OAuth callback redirige con el token en el fragmento (#host_token=...)
-    // El fragmento no viaja al servidor, así que es seguro leerlo aquí y guardarlo
+    // En desarrollo el OAuth callback redirige con el token en #host_token=...
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const tokenFromHash = hash.get('host_token');
     if (tokenFromHash) {
@@ -149,16 +159,14 @@ function App() {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
 
-    // Obtener info de red del servidor backend
-    fetch('/api/info')
+    // Info de red/sala (para QR y nombre del host)
+    fetch(r('/info'))
       .then(res => res.json())
-      .then(data => {
-        setServerInfo(data);
-      })
-      .catch(err => console.error('Error cargando info de red:', err));
+      .then(data => setServerInfo(data))
+      .catch(err => console.error('Error cargando info de sala:', err));
 
-    // Validar estado de autenticación de Spotify del Host
-    fetch('/api/auth/status')
+    // Estado de autenticación de la sala
+    fetch(r('/auth/status'))
       .then(res => res.json())
       .then(data => {
         setIsAuthenticated(data.isAuthenticated);
@@ -169,8 +177,7 @@ function App() {
           if (!storedName) {
             setShowNickModal(true);
           } else {
-            // Verificar si el anfitrión ya nos aprobó
-            fetch('/api/guest/join', {
+            fetch(r('/guest/join'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name: storedName })
@@ -189,27 +196,22 @@ function App() {
               });
           }
         } else if (data.isAuthenticated) {
-          // Si el host ya está autenticado, entrar al dashboard directo
           setAppMode('host');
         } else {
           setAppMode('choose');
         }
       })
-      .catch(() => {
-        setAppMode('choose');
-      });
-  }, []);
+      .catch(() => setAppMode('choose'));
+  }, [roomId]);
 
   // Polling para verificar aprobación de invitados (Móvil/Invitado)
   useEffect(() => {
     if (appMode !== 'guest' || !guestName) return;
 
     const checkApproval = () => {
-      fetch(`/api/guest/status?name=${encodeURIComponent(guestName)}`)
+      fetch(r(`/guest/status?name=${encodeURIComponent(guestName)}`))
         .then(res => res.json())
-        .then(data => {
-          setGuestApprovalStatus(data.status);
-        })
+        .then(data => setGuestApprovalStatus(data.status))
         .catch(err => console.error('Error verificando aprobación:', err));
     };
 
@@ -223,11 +225,9 @@ function App() {
     if (appMode !== 'host' || !isAuthenticated) return;
 
     const fetchPending = () => {
-      fetch('/api/guest/pending')
+      fetch(r('/guest/pending'))
         .then(res => res.json())
-        .then(data => {
-          setPendingApprovals(data || []);
-        })
+        .then(data => setPendingApprovals(data || []))
         .catch(err => console.error('Error al obtener solicitudes pendientes:', err));
     };
 
@@ -248,9 +248,9 @@ function App() {
 
     const fetchPlayback = () => {
       // Incluir el nombre del invitado en las consultas de polling para actualizar su actividad en el backend
-      const url = appMode === 'guest' && guestName 
-        ? `/api/playback?guestName=${encodeURIComponent(guestName)}` 
-        : '/api/playback';
+      const url = appMode === 'guest' && guestName
+        ? r(`/playback?guestName=${encodeURIComponent(guestName)}`)
+        : r('/playback');
 
       fetch(url)
         .then(res => {
@@ -294,7 +294,7 @@ function App() {
   useEffect(() => {
     if (appMode === 'host' && isAuthenticated) {
       const fetchDevices = () => {
-        fetch('/api/playback/devices')
+        fetch(r('/playback/devices'))
           .then(res => res.json())
           .then(data => setDevices(data))
           .catch(err => console.error('Error fetching devices:', err));
@@ -339,7 +339,7 @@ function App() {
         const player = new window.Spotify.Player({
           name: 'JamSpotify Web Player',
           getOAuthToken: cb => {
-            fetch('/api/auth/token', {
+            fetch(r('/auth/token'), {
               headers: hostToken ? { 'X-Host-Token': hostToken } : {}
             })
               .then(res => res.json())
@@ -418,7 +418,7 @@ function App() {
 
     setIsSearching(true);
     const delayDebounce = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`)
+      fetch(r(`/search?q=${encodeURIComponent(searchQuery)}`))
         .then(res => res.json())
         .then(data => {
           setSearchResults(data);
@@ -445,8 +445,8 @@ function App() {
   // Controles de Reproducción
   const togglePlay = () => {
     if (!currentlyPlaying) return;
-    const endpoint = currentlyPlaying.isPlaying ? '/api/playback/pause' : '/api/playback/play';
-    fetch(endpoint, { 
+    const endpoint = currentlyPlaying.isPlaying ? r('/playback/pause') : r('/playback/play');
+    fetch(endpoint, {
       method: 'PUT',
       headers: hostToken ? { 'X-Host-Token': hostToken } : {}
     })
@@ -459,7 +459,7 @@ function App() {
   };
 
   const skipNext = () => {
-    fetch('/api/playback/next', { 
+    fetch(r('/playback/next'), {
       method: 'POST',
       headers: hostToken ? { 'X-Host-Token': hostToken } : {}
     })
@@ -473,7 +473,7 @@ function App() {
   };
 
   const skipPrevious = () => {
-    fetch('/api/playback/previous', { 
+    fetch(r('/playback/previous'), {
       method: 'POST',
       headers: hostToken ? { 'X-Host-Token': hostToken } : {}
     })
@@ -486,7 +486,7 @@ function App() {
   };
 
   const seekRelative = (seconds) => {
-    fetch('/api/playback/seek', {
+    fetch(r('/playback/seek'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -510,7 +510,7 @@ function App() {
     const clickPercent = clickX / width;
     const targetMs = clickPercent * currentlyPlaying.durationMs;
 
-    fetch('/api/playback/seek', {
+    fetch(r('/playback/seek'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -536,14 +536,14 @@ function App() {
   };
 
   const refreshDevices = () => {
-    fetch('/api/playback/devices')
+    fetch(r('/playback/devices'))
       .then(res => res.json())
       .then(data => setDevices(data))
       .catch(err => console.error('Error cargando dispositivos:', err));
   };
 
   const removeFromQueue = (itemId) => {
-    const url = `/api/queue/${itemId}${guestName ? `?guestName=${encodeURIComponent(guestName)}` : ''}`;
+    const url = r(`/queue/${itemId}${guestName ? `?guestName=${encodeURIComponent(guestName)}` : ''}`);
     fetch(url, {
       method: 'DELETE',
       headers: {
@@ -584,7 +584,7 @@ function App() {
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
-    fetch('/api/queue/reorder', {
+    fetch(r('/queue/reorder'), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -603,7 +603,7 @@ function App() {
 
   const changeVolume = (newVol) => {
     setLocalVolume(newVol);
-    fetch('/api/playback/volume', {
+    fetch(r('/playback/volume'), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -641,7 +641,7 @@ function App() {
   };
 
   const transferDevice = (deviceId) => {
-    fetch('/api/playback/transfer', {
+    fetch(r('/playback/transfer'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -654,7 +654,7 @@ function App() {
         if (data.success) {
           setShowDeviceSelector(false);
           // Recargar dispositivos de inmediato
-          fetch('/api/playback/devices')
+          fetch(r('/playback/devices'))
             .then(res => res.json())
             .then(data => setDevices(data));
         }
@@ -663,7 +663,7 @@ function App() {
 
   // Copiar link al portapapeles
   const copyLink = () => {
-    const link = `${serverInfo.joinUrl || window.location.origin}?mode=guest`;
+    const link = serverInfo.joinUrl || `${window.location.origin}?roomId=${roomId}&mode=guest`;
     navigator.clipboard.writeText(link).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -681,7 +681,7 @@ function App() {
     const trackIdKey = track.id || track.uri;
     setQueueStatus(prev => ({ ...prev, [trackIdKey]: 'loading' }));
 
-    fetch('/api/queue', {
+    fetch(r('/queue'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -735,7 +735,7 @@ function App() {
 
   // Reproducir de inmediato (Solo Host)
   const playTrackImmediately = (track) => {
-    fetch('/api/playback/play', {
+    fetch(r('/playback/play'), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -758,7 +758,7 @@ function App() {
     const cleanedName = nickInput.trim();
     if (!cleanedName) return;
 
-    fetch('/api/guest/join', {
+    fetch(r('/guest/join'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: cleanedName })
@@ -782,7 +782,7 @@ function App() {
 
   // Aprobar o rechazar invitados (Solo Host)
   const handleApproveGuest = (name, action) => {
-    fetch('/api/guest/approve', {
+    fetch(r('/guest/approve'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -799,12 +799,10 @@ function App() {
 
   // Cerrar Sesión Spotify
   const handleLogout = () => {
-    fetch('/api/auth/logout', { method: 'POST' })
+    fetch(r('/auth/logout'), { method: 'POST' })
       .then(() => {
-        setIsAuthenticated(false);
-        setHostToken('');
         localStorage.removeItem('jam_host_token');
-        setAppMode('choose');
+        window.location.href = '/';
       });
   };
 
@@ -814,7 +812,7 @@ function App() {
       return;
     }
     
-    fetch('/api/admin/reset', {
+    fetch(r('/admin/reset'), {
       method: 'POST',
       headers: {
         ...(hostToken ? { 'X-Host-Token': hostToken } : {})
@@ -823,14 +821,9 @@ function App() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          setIsAuthenticated(false);
-          setHostToken('');
           localStorage.removeItem('jam_host_token');
-          setQueue([]);
-          setHistory([]);
-          setPendingApprovals([]);
-          setAppMode('choose');
           alert('Sala restablecida con éxito. Redirigiendo a la pantalla de inicio.');
+          window.location.href = '/';
         } else {
           alert('No se pudo restablecer la sala: ' + (data.error || 'error desconocido'));
         }
@@ -864,16 +857,23 @@ function App() {
               <Icons.Spotify />
               Iniciar como Anfitrión
             </a>
-            
-            <button 
-              onClick={() => {
-                setAppMode('guest');
-                if (!guestName) setShowNickModal(true);
-              }}
-              className="btn-secondary"
-            >
-              Unirse como Invitado
-            </button>
+
+            {roomId && (
+              <button
+                onClick={() => {
+                  setAppMode('guest');
+                  if (!guestName) setShowNickModal(true);
+                }}
+                className="btn-secondary"
+              >
+                Unirse como Invitado
+              </button>
+            )}
+            {!roomId && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                Para unirte como invitado, escanea el código QR del anfitrión.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -1340,7 +1340,7 @@ function App() {
                 {serverInfo.joinUrl ? (
                   <>
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(serverInfo.joinUrl + '?mode=guest')}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(serverInfo.joinUrl)}`}
                       alt="Código QR de JamSpotify"
                       className="qr-code-img"
                     />
