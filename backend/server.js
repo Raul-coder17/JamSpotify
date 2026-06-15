@@ -70,6 +70,8 @@ if (fs.existsSync(STATE_FILE)) {
 let cachedSpotifyPlayback = null;
 let lastSpotifyFetchTime = 0;
 let removedQueueUris = new Set(); // URIs eliminadas manualmente para ocultar en la cola
+let lastForcedUri = null; // URI que /api/playback/next forzó; evita falsos positivos en detección de desviación
+let guestTokens = {}; // Mapa { nombre: token } para verificar identidad de invitados
 
 function invalidatePlaybackCache() {
   lastSpotifyFetchTime = 0;
@@ -407,20 +409,23 @@ app.post('/api/guest/join', (req, res) => {
   }
   const cleanName = name.trim();
 
+  // Asegurar que el invitado tenga un token de sesión
+  if (!guestTokens[cleanName]) {
+    guestTokens[cleanName] = crypto.randomBytes(16).toString('hex');
+  }
+
   // Si ya estaba aprobado
   if (pendingGuests[cleanName] === 'approved') {
     activeUsers[cleanName] = Date.now();
-    return res.json({ status: 'approved' });
+    return res.json({ status: 'approved', guestToken: guestTokens[cleanName] });
   }
 
-  // Si está rechazado, puede re-enviar la solicitud limpiándolo primero para que no quede bloqueado
-  // permanentemente, pero si queremos persistir el rechazo momentáneamente:
+  // Si está rechazado, permitir re-solicitar reiniciando a pending
   if (pendingGuests[cleanName] === 'rejected') {
-    // Si intenta registrarse de nuevo, permitimos re-solicitar reiniciando a pending
     pendingGuests[cleanName] = 'pending';
     console.log(`[Security] Invitado rechazado re-solicita acceso: ${cleanName}`);
     saveJamState();
-    return res.json({ status: 'pending' });
+    return res.json({ status: 'pending', guestToken: guestTokens[cleanName] });
   }
 
   // De lo contrario, iniciar solicitud o mantener estado 'pending'
@@ -430,7 +435,7 @@ app.post('/api/guest/join', (req, res) => {
     saveJamState();
   }
 
-  res.json({ status: pendingGuests[cleanName] });
+  res.json({ status: pendingGuests[cleanName], guestToken: guestTokens[cleanName] });
 });
 
 // 2. Consultar estado de aprobación del invitado
@@ -560,22 +565,29 @@ app.get('/api/playback', async (req, res) => {
           
           // Si cambió la canción en reproducción
           if (currentTrackState && currentTrackState.id !== currentlyPlaying.id) {
+            // Si el cambio fue provocado por /api/playback/next, no es una desviación
+            const isForcedTransition = (lastForcedUri !== null && lastForcedUri === currentlyPlaying.uri);
+            if (isForcedTransition) {
+              lastForcedUri = null;
+            }
+
             // Si hay canciones en cola, verificar si se desvió de lo esperado
-            if (jamQueue.length > 0) {
+            // (omitir la comprobación en transiciones forzadas por el host)
+            if (jamQueue.length > 0 && !isForcedTransition) {
               const nextExpectedTrack = jamQueue[0];
               if (currentlyPlaying.uri !== nextExpectedTrack.uri) {
                 console.log(`[Queue Sync] Desviación detectada. Sonando: ${currentlyPlaying.name}, Esperada: ${nextExpectedTrack.name}. Redirigiendo reproducción...`);
-                
+
                 // Forzar reproducción de la canción esperada de nuestra cola
                 fetch('https://api.spotify.com/v1/me/player/play', {
                   method: 'PUT',
-                  headers: { 
+                  headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                   },
                   body: JSON.stringify({ uris: [nextExpectedTrack.uri] })
                 }).catch(err => console.error('[Queue Sync Error] Falló redirección:', err));
-                
+
                 currentTrackState = currentlyPlaying;
                 cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
                 lastSpotifyFetchTime = Date.now();
@@ -785,20 +797,28 @@ app.post('/api/playback/next', hostAuthMiddleware, async (req, res) => {
       });
       
       if (response.status === 204 || response.ok) {
-        // Remover de la cola y agregar a historial inmediatamente
-        const matchedItem = jamQueue.shift();
-        if (matchedItem) {
-          jamHistory.unshift({
-            id: `${matchedItem.uri}-${Date.now()}`,
-            uri: matchedItem.uri,
-            name: matchedItem.name,
-            artists: matchedItem.artists,
-            albumArt: matchedItem.albumArt,
-            addedBy: matchedItem.addedBy,
-            playedAt: Date.now()
-          });
-          if (jamHistory.length > 30) jamHistory.pop();
+        // Agregar al historial la canción que se está saltando (la actual), no la siguiente
+        if (currentTrackState) {
+          const matchedQueueItem = jamQueue.find(i => i.uri === currentTrackState.uri);
+          const prevAddedBy = matchedQueueItem
+            ? matchedQueueItem.addedBy
+            : (jamHistory.find(i => i.uri === currentTrackState.uri)?.addedBy || 'Sistema / Spotify');
+          if (jamHistory.length === 0 || jamHistory[0].uri !== currentTrackState.uri) {
+            jamHistory.unshift({
+              id: `${currentTrackState.uri}-${Date.now()}`,
+              uri: currentTrackState.uri,
+              name: currentTrackState.name,
+              artists: currentTrackState.artists,
+              albumArt: currentTrackState.albumArt,
+              addedBy: prevAddedBy,
+              playedAt: Date.now()
+            });
+            if (jamHistory.length > 30) jamHistory.pop();
+          }
         }
+        // Remover la siguiente canción de la cola y registrarla como transición forzada
+        jamQueue.shift();
+        lastForcedUri = nextTrack.uri;
         saveJamState();
         invalidatePlaybackCache();
         return res.json({ success: true, queue: jamQueue, history: jamHistory });
@@ -919,6 +939,12 @@ app.put('/api/playback/volume', hostAuthMiddleware, async (req, res) => {
   }
 });
 
+// Verificar que el token de invitado enviado coincida con el registrado para ese nombre
+function verifyGuestToken(req, guestName) {
+  const token = req.headers['x-guest-token'];
+  return token && guestTokens[guestName] === token;
+}
+
 /* ==========================================================================
    RUTAS DE BÚSQUEDA Y GESTIÓN DE COLA (INVITADOS)
    ========================================================================== */
@@ -991,6 +1017,9 @@ app.post('/api/queue', async (req, res) => {
     if (pendingGuests[guestName] !== 'approved') {
       return res.status(403).json({ error: 'No tienes acceso autorizado por el anfitrión para agregar canciones.' });
     }
+    if (!verifyGuestToken(req, guestName)) {
+      return res.status(403).json({ error: 'Token de invitado inválido. Vuelve a unirte a la sala.' });
+    }
   }
 
   try {
@@ -1062,7 +1091,7 @@ app.delete('/api/queue/:id', (req, res) => {
   const item = jamQueue[index];
   const isHost = isHostRequest(req);
   
-  // Si no es el host verificado, validar propiedad del invitado
+  // Si no es el host verificado, validar identidad y propiedad del invitado
   if (!isHost) {
     if (!guestName || guestName.trim() === '') {
       return res.status(403).json({ error: 'Identificación de invitado requerida.' });
@@ -1070,6 +1099,9 @@ app.delete('/api/queue/:id', (req, res) => {
     const cleanGuestName = guestName.trim();
     if (cleanGuestName === 'Host' || cleanGuestName === 'Anfitrión') {
       return res.status(403).json({ error: 'Nombre reservado para el anfitrión.' });
+    }
+    if (!verifyGuestToken(req, cleanGuestName)) {
+      return res.status(403).json({ error: 'Token de invitado inválido. Vuelve a unirte a la sala.' });
     }
     if (item.addedBy !== cleanGuestName) {
       return res.status(403).json({ error: 'Solo puedes eliminar canciones que tú agregaste.' });

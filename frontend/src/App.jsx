@@ -102,6 +102,7 @@ function App() {
   // Spotify Auth Estado
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hostToken, setHostToken] = useState(localStorage.getItem('jam_host_token') || '');
+  const [guestToken, setGuestToken] = useState(sessionStorage.getItem('jam_guest_token') || '');
 
   // Playback Estado
   const [currentlyPlaying, setCurrentlyPlaying] = useState(null);
@@ -177,6 +178,10 @@ function App() {
               .then(res => res.json())
               .then(data => {
                 setGuestApprovalStatus(data.status);
+                if (data.guestToken) {
+                  setGuestToken(data.guestToken);
+                  sessionStorage.setItem('jam_guest_token', data.guestToken);
+                }
               })
               .catch(() => {
                 setGuestApprovalStatus('not_requested');
@@ -539,9 +544,12 @@ function App() {
 
   const removeFromQueue = (itemId) => {
     const url = `/api/queue/${itemId}${guestName ? `?guestName=${encodeURIComponent(guestName)}` : ''}`;
-    fetch(url, { 
+    fetch(url, {
       method: 'DELETE',
-      headers: hostToken ? { 'X-Host-Token': hostToken } : {}
+      headers: {
+        ...(hostToken ? { 'X-Host-Token': hostToken } : {}),
+        ...(guestToken ? { 'X-Guest-Token': guestToken } : {})
+      }
     })
       .then(res => res.json())
       .then(data => {
@@ -677,7 +685,8 @@ function App() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(hostToken ? { 'X-Host-Token': hostToken } : {})
+        ...(hostToken ? { 'X-Host-Token': hostToken } : {}),
+        ...(guestToken && appMode === 'guest' ? { 'X-Guest-Token': guestToken } : {})
       },
       body: JSON.stringify({
         uri: track.uri,
@@ -759,6 +768,10 @@ function App() {
         localStorage.setItem('jam_guest_name', cleanedName);
         setGuestName(cleanedName);
         setGuestApprovalStatus(data.status);
+        if (data.guestToken) {
+          setGuestToken(data.guestToken);
+          sessionStorage.setItem('jam_guest_token', data.guestToken);
+        }
         setShowNickModal(false);
       })
       .catch(err => {
