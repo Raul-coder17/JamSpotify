@@ -10,6 +10,9 @@ function getPool() {
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   });
+  pool.on('error', (err) => {
+    console.error('[DB] Error inesperado en cliente de base de datos:', err.message);
+  });
   return pool;
 }
 
