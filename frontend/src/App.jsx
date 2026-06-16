@@ -4,27 +4,27 @@ import React, { useState, useEffect, useRef } from 'react';
 const Icons = {
   Spotify: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.565.387-.86.207-2.377-1.454-5.37-1.783-8.893-.982-.336.076-.67-.135-.746-.47-.077-.337.135-.67.472-.747 3.847-.878 7.146-.505 9.82 1.13.295.18.387.563.207.862zm1.226-2.724c-.226.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.075-1.182-.413.125-.847-.11-1.07-.488-.22-.38-.11-.847.262-1.07 3.67-1.114 8.243-.573 11.385 1.36.368.226.488.707.262 1.074zm.106-2.833C14.39 8.8 8.448 8.605 5.012 9.648c-.527.16-1.087-.14-1.247-.667-.16-.527.14-1.086.666-1.247 3.948-1.198 10.512-.973 14.588 1.447.475.282.63.896.347 1.37-.282.475-.897.63-1.37.348z"/>
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424c-.18.295-.565.387-.86.207-2.377-1.454-5.37-1.783-8.893-.982-.336.076-.67-.135-.746-.47-.077-.337.135-.67.472-.747 3.847-.878 7.146-.505 9.82 1.13.295.18.387.563.207.862zm1.226-2.724c-.226.367-.707.487-1.074.26-2.72-1.672-6.87-2.157-10.075-1.182-.413.125-.847-.11-1.07-.488-.22-.38-.11-.847.262-1.07 3.67-1.114 8.243-.573 11.385 1.36.368.226.488.707.262 1.074zm.106-2.833C14.39 8.8 8.448 8.605 5.012 9.648c-.527.16-1.087-.14-1.247-.667-.16-.527.14-1.086.666-1.247 3.948-1.198 10.512-.973 14.588 1.447.475.282.63.896.347 1.37-.282.475-.897.63-1.37.348z" />
     </svg>
   ),
   Play: (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <path d="M8 5v14l11-7z"/>
+      <path d="M8 5v14l11-7z" />
     </svg>
   ),
   Pause: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
     </svg>
   ),
   Skip: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+      <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
     </svg>
   ),
   Prev: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+      <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
     </svg>
   ),
   Search: () => (
@@ -240,7 +240,7 @@ function App() {
   // Polling de reproducción y cola (cada 2.5 segundos)
   useEffect(() => {
     if (appMode === 'choose') return;
-    
+
     // Si estamos en modo host pero no está autenticado, no hacer polling
     if (appMode === 'host' && !isAuthenticated) return;
 
@@ -279,7 +279,7 @@ function App() {
     const interval = setInterval(fetchPlayback, 1000);
 
     return () => clearInterval(interval);
-  }, [appMode, isAuthenticated]);
+  }, [appMode, isAuthenticated, guestApprovalStatus]);
 
   // Sincronizar volumen local con el volumen reportado por Spotify
   useEffect(() => {
@@ -300,7 +300,7 @@ function App() {
           .then(data => setDevices(data))
           .catch(err => console.error('Error fetching devices:', err));
       };
-      
+
       fetchDevices();
       const interval = setInterval(fetchDevices, 7000);
       return () => clearInterval(interval);
@@ -574,11 +574,11 @@ function App() {
 
     const updatedQueue = [...queue];
     const draggedItem = updatedQueue[draggedIndex];
-    
+
     // Quitar de la posición previa e insertar en la nueva
     updatedQueue.splice(draggedIndex, 1);
     updatedQueue.splice(overIndex, 0, draggedItem);
-    
+
     setDraggedIndex(overIndex);
     setQueue(updatedQueue);
   };
@@ -812,7 +812,7 @@ function App() {
     if (!window.confirm('¿Estás seguro de que deseas restablecer por completo la sala? Se borrarán la cola de reproducción, el historial de canciones, la lista de invitados y se cerrará la sesión de Spotify.')) {
       return;
     }
-    
+
     fetch(r('/admin/reset'), {
       method: 'POST',
       headers: {
@@ -900,7 +900,7 @@ function App() {
               <Icons.Spotify />
               <span>JamSpotify</span>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', gap: '6px', margin: '1rem 0' }}>
               <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite' }}></span>
               <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite', animationDelay: '0.3s' }}></span>
@@ -911,8 +911,8 @@ function App() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
               Hola <strong>{guestName}</strong>, tu solicitud de acceso ha sido enviada al anfitrión. Pídele que te acepte para poder ingresar y encolar canciones.
             </p>
-            
-            <button 
+
+            <button
               onClick={() => {
                 localStorage.removeItem('jam_guest_name');
                 setGuestName('');
@@ -937,12 +937,12 @@ function App() {
               <Icons.Spotify />
               <span>Acceso Denegado</span>
             </div>
-            
+
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
               El anfitrión de la sala ha rechazado tu solicitud de acceso para el nombre <strong>{guestName}</strong>.
             </p>
-            
-            <button 
+
+            <button
               onClick={() => {
                 localStorage.removeItem('jam_guest_name');
                 setGuestName('');
@@ -979,11 +979,11 @@ function App() {
             </span>
           </div>
         )}
-        
+
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           {appMode === 'host' && (
             <>
-              <button 
+              <button
                 onClick={() => setShowDeviceSelector(!showDeviceSelector)}
                 className={`btn-secondary ${activeDevice ? 'active' : ''}`}
                 style={{ padding: '0.5rem 0.75rem', gap: '0.4rem', fontSize: '0.85rem' }}
@@ -991,15 +991,15 @@ function App() {
                 <Icons.Device />
                 {activeDevice ? activeDevice.name : 'Elegir Dispositivo'}
               </button>
-              
-              <button 
-                onClick={handleResetJam} 
-                className="btn-secondary" 
+
+              <button
+                onClick={handleResetJam}
+                className="btn-secondary"
                 style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#ff4d4d', borderColor: 'rgba(255, 77, 77, 0.2)' }}
               >
                 Restablecer Sala
               </button>
-              
+
               <button onClick={handleLogout} className="btn-secondary" style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
                 Desconectar
               </button>
@@ -1009,7 +1009,7 @@ function App() {
           {appMode === 'guest' && guestName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span className="added-by-tag">Invitado: {guestName}</span>
-              <button 
+              <button
                 onClick={() => {
                   setNickInput(guestName);
                   setShowNickModal(true);
@@ -1041,7 +1041,7 @@ function App() {
             </button>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Spotify requiere un reproductor activo. 
+            Spotify requiere un reproductor activo.
             {webPlayerState !== 'ready' && (
               <> <strong>Para reproducir en esta PC:</strong> Abre la aplicación de Spotify en tu ordenador, pon una canción y haz clic en "Refrescar" arriba.</>
             )}
@@ -1049,13 +1049,13 @@ function App() {
           <div className="device-select-list">
             {/* Reproductor Web (Navegador Actual) */}
             {webPlayerState === 'ready' && webPlayerDeviceId && (
-              <div 
+              <div
                 onClick={() => transferDevice(webPlayerDeviceId)}
                 className={`device-item ${activeDevice && activeDevice.id === webPlayerDeviceId ? 'active' : ''}`}
-                style={{ 
-                  border: '1px solid var(--spotify-green)', 
-                  background: 'rgba(29, 185, 84, 0.05)', 
-                  marginBottom: '0.75rem' 
+                style={{
+                  border: '1px solid var(--spotify-green)',
+                  background: 'rgba(29, 185, 84, 0.05)',
+                  marginBottom: '0.75rem'
                 }}
               >
                 <div>
@@ -1083,8 +1083,8 @@ function App() {
               devices
                 .filter(device => device.id !== webPlayerDeviceId)
                 .map(device => (
-                  <div 
-                    key={device.id} 
+                  <div
+                    key={device.id}
                     onClick={() => transferDevice(device.id)}
                     className={`device-item ${device.is_active ? 'active' : ''}`}
                   >
@@ -1105,10 +1105,10 @@ function App() {
 
       {/* Dashboard Principal */}
       <main className="dashboard-grid">
-        
+
         {/* LADO IZQUIERDO: Reproductor y Buscador */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
-          
+
           {/* Card Reproductor Actual */}
           <div className="glass-panel player-card">
             {currentlyPlaying ? (
@@ -1130,10 +1130,10 @@ function App() {
                 {/* Vinilo */}
                 <div className="vinyl-container">
                   <div className={`vinyl-disc ${currentlyPlaying.isPlaying ? 'spin-animation' : 'spin-animation spin-paused'}`}>
-                    <img 
-                      src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'} 
-                      alt={currentlyPlaying.name} 
-                      className="vinyl-cover" 
+                    <img
+                      src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
+                      alt={currentlyPlaying.name}
+                      className="vinyl-cover"
                     />
                     <div className="vinyl-center-hole"></div>
                   </div>
@@ -1149,7 +1149,7 @@ function App() {
 
                 {/* Barra de progreso */}
                 <div className="progress-bar-container">
-                  <div 
+                  <div
                     className={`progress-track ${appMode === 'host' ? 'clickable' : ''}`}
                     onClick={appMode === 'host' ? seekAbsolute : undefined}
                   >
@@ -1170,13 +1170,13 @@ function App() {
                       </button>
                       <button onClick={() => seekRelative(-15)} className="btn-icon btn-seek" title="Retroceder 15s">
                         -15s
-                       </button>
+                      </button>
                       <button onClick={togglePlay} className="btn-icon play-pause">
                         {currentlyPlaying.isPlaying ? <Icons.Pause /> : <Icons.Play />}
                       </button>
                       <button onClick={() => seekRelative(15)} className="btn-icon btn-seek" title="Avanzar 15s">
                         +15s
-                       </button>
+                      </button>
                       <button onClick={skipNext} className="btn-icon" title="Siguiente">
                         <Icons.Skip />
                       </button>
@@ -1184,9 +1184,9 @@ function App() {
 
                     {/* Control de Volumen (Solo Host) */}
                     <div className="volume-control-container">
-                      <button 
-                        onClick={toggleMute} 
-                        className="btn-icon" 
+                      <button
+                        onClick={toggleMute}
+                        className="btn-icon"
                         title={isMuted ? 'Quitar Silencio' : 'Silenciar'}
                         style={{ padding: '0.2rem', color: 'var(--text-secondary)' }}
                       >
@@ -1196,13 +1196,13 @@ function App() {
                           <Icons.Volume />
                         )}
                       </button>
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="100" 
-                        value={localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)} 
-                        onChange={handleVolumeChange} 
-                        className="volume-slider" 
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}
+                        onChange={handleVolumeChange}
+                        className="volume-slider"
                         title={`Volumen: ${localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}%`}
                       />
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', minWidth: '32px', textAlign: 'right' }}>
@@ -1237,11 +1237,11 @@ function App() {
             <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               Buscar y Proponer Canción
             </h2>
-            
+
             <div className="search-input-wrapper">
-              <input 
-                type="text" 
-                placeholder="Busca por canción, artista..." 
+              <input
+                type="text"
+                placeholder="Busca por canción, artista..."
                 className="input-glow"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -1266,21 +1266,21 @@ function App() {
                         <div className="track-title">{track.name}</div>
                         <div className="track-artist">{track.artists}</div>
                       </div>
-                      
-                      <button 
+
+                      <button
                         onClick={() => addToQueue(track)}
                         className="btn-secondary"
                         disabled={status === 'loading'}
-                        style={{ 
-                          padding: '0.4rem 0.8rem', 
+                        style={{
+                          padding: '0.4rem 0.8rem',
                           fontSize: '0.8rem',
                           borderColor: status === 'success' ? 'var(--spotify-green)' : 'var(--border-glass)',
                           color: status === 'success' ? 'var(--spotify-green)' : 'var(--text-primary)'
                         }}
                       >
                         {status === 'loading' ? 'Agregando...' :
-                         status === 'success' ? <><Icons.Check /> Agregada</> :
-                         status === 'error' ? 'Error' : 'Agregar'}
+                          status === 'success' ? <><Icons.Check /> Agregada</> :
+                            status === 'error' ? 'Error' : 'Agregar'}
                       </button>
                     </div>
                   );
@@ -1299,7 +1299,7 @@ function App() {
 
         {/* LADO DERECHO: Cola compartida e Información de Compartir */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
-          
+
           {/* Solicitudes de Acceso (Solo Host) */}
           {appMode === 'host' && pendingApprovals.length > 0 && (
             <div className="glass-panel" style={{ border: '1px solid rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.05)', animation: 'fadeInUp 0.3s ease' }}>
@@ -1315,14 +1315,14 @@ function App() {
                   <div key={req.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '0.5rem', border: '1px solid var(--border-glass)' }}>
                     <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff' }}>{req.name}</span>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button 
+                      <button
                         onClick={() => handleApproveGuest(req.name, 'approve')}
                         className="btn-primary"
                         style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: '0.5rem' }}
                       >
                         Aceptar
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleApproveGuest(req.name, 'reject')}
                         className="btn-secondary"
                         style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: '0.5rem', borderColor: '#ef4444', color: '#ef4444' }}
@@ -1349,7 +1349,7 @@ function App() {
               <div className="share-section">
                 {serverInfo.joinUrl ? (
                   <>
-                    <img 
+                    <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(serverInfo.joinUrl)}`}
                       alt="Código QR de JamSpotify"
                       className="qr-code-img"
@@ -1365,16 +1365,16 @@ function App() {
                 )}
 
                 <div className="share-link-copy">
-                  <input 
-                    type="text" 
-                    readOnly 
-                    value="Enlace de Invitación (Oculto por seguridad)" 
+                  <input
+                    type="text"
+                    readOnly
+                    value="Enlace de Invitación (Oculto por seguridad)"
                     className="share-link-input"
                     style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}
                   />
-                  <button 
-                    onClick={copyLink} 
-                    className="btn-secondary" 
+                  <button
+                    onClick={copyLink}
+                    className="btn-secondary"
                     style={{ padding: '0.5rem 0.75rem', display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}
                     title="Copiar enlace"
                   >
@@ -1388,13 +1388,13 @@ function App() {
           {/* Cola de Reproducción Compartida e Historial (Pestañas) */}
           <div className="glass-panel" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <div className="tabs-container">
-              <button 
+              <button
                 className={`tab-btn ${sidebarTab === 'queue' ? 'active' : ''}`}
                 onClick={() => setSidebarTab('queue')}
               >
                 Cola ({queue.length})
               </button>
-              <button 
+              <button
                 className={`tab-btn ${sidebarTab === 'history' ? 'active' : ''}`}
                 onClick={() => setSidebarTab('history')}
               >
@@ -1410,9 +1410,9 @@ function App() {
                   </div>
                 ) : (
                   queue.map((item, index) => (
-                    <div 
-                      key={item.id} 
-                      className={`track-item ${draggedIndex === index ? 'dragging' : ''}`} 
+                    <div
+                      key={item.id}
+                      className={`track-item ${draggedIndex === index ? 'dragging' : ''}`}
                       style={{ animationDelay: `${index * 0.05}s` }}
                       draggable={appMode === 'host'}
                       onDragStart={(e) => handleDragStart(e, index)}
@@ -1430,7 +1430,7 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <span className="added-by-tag">{item.addedBy}</span>
                         {(appMode === 'host' || item.addedBy === guestName) && (
-                          <button 
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               removeFromQueue(item.id);
@@ -1469,20 +1469,20 @@ function App() {
                         </div>
                         <div style={{ display: 'flex', gap: '0.25rem' }}>
                           {appMode === 'host' && (
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }} 
-                              className="btn-icon" 
-                              style={{ padding: '0.35rem', color: 'var(--spotify-green)', background: 'rgba(29, 185, 84, 0.1)', borderRadius: '50%' }} 
+                            <button
+                              onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }}
+                              className="btn-icon"
+                              style={{ padding: '0.35rem', color: 'var(--spotify-green)', background: 'rgba(29, 185, 84, 0.1)', borderRadius: '50%' }}
                               title="Reproducir ahora"
                             >
                               <Icons.Play style={{ width: '12px', height: '12px' }} />
                             </button>
                           )}
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); addToQueue(item); }} 
-                            className="btn-icon" 
-                            style={{ 
-                              padding: '0.35rem', 
+                          <button
+                            onClick={(e) => { e.stopPropagation(); addToQueue(item); }}
+                            className="btn-icon"
+                            style={{
+                              padding: '0.35rem',
                               color: queueStatus[item.id || item.uri] === 'success' ? '#1db954' : 'var(--text-secondary)',
                               background: 'rgba(255, 255, 255, 0.05)',
                               borderRadius: '50%'
@@ -1517,11 +1517,11 @@ function App() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
               Ingresa un apodo para que todos en la sala sepan quién encoló cada canción.
             </p>
-            
+
             <form onSubmit={handleSaveNick} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <input 
-                type="text" 
-                placeholder="Ej. Raúl, María, DJ_Fiesta" 
+              <input
+                type="text"
+                placeholder="Ej. Raúl, María, DJ_Fiesta"
                 required
                 maxLength="20"
                 value={nickInput}
