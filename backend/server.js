@@ -250,8 +250,13 @@ app.get('/api/auth/login', (req, res) => {
 });
 
 app.get('/api/callback', async (req, res) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  const getRedirectUrl = (pathWithQuery) => {
+    return isProd ? pathWithQuery : `http://localhost:5173${pathWithQuery}`;
+  };
+
   const code = req.query.code || null;
-  if (!code) return res.redirect('/?error=state_mismatch');
+  if (!code) return res.redirect(getRedirectUrl('/?error=state_mismatch'));
 
   const authHeader = Buffer.from(
     `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
@@ -275,7 +280,16 @@ app.get('/api/callback', async (req, res) => {
     const data = await response.json();
     if (!response.ok) {
       console.error('[Error Callback]', data);
-      return res.redirect('/?error=token_exchange_failed');
+      return res.redirect(getRedirectUrl('/?error=token_exchange_failed'));
+    }
+
+    // Verificar que el token funciona (detecta usuarios no registrados en modo Development)
+    const profileCheck = await fetch('https://api.spotify.com/v1/me', {
+      headers: { 'Authorization': `Bearer ${data.access_token}` }
+    });
+    if (!profileCheck.ok) {
+      console.warn(`[Auth] Acceso denegado por Spotify (status ${profileCheck.status}) — usuario no registrado en el Dashboard.`);
+      return res.redirect(getRedirectUrl('/?error=not_authorized'));
     }
 
     // Crear sala nueva con UUID
@@ -309,7 +323,7 @@ app.get('/api/callback', async (req, res) => {
 
     console.log(`[Auth] Sala creada: ${roomId} para host: ${room.hostName}`);
 
-    if (process.env.NODE_ENV === 'production') {
+    if (isProd) {
       res.cookie('jam_host_token', room.hostToken, {
         httpOnly: true,
         secure: true,
@@ -322,7 +336,7 @@ app.get('/api/callback', async (req, res) => {
     }
   } catch (error) {
     console.error('[Error Callback]', error);
-    res.redirect('/?error=internal_server_error');
+    res.redirect(getRedirectUrl('/?error=internal_server_error'));
   }
 });
 

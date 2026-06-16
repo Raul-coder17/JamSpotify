@@ -92,6 +92,7 @@ function App() {
   const [appMode, setAppMode] = useState('choose'); // 'choose', 'host', 'guest'
   // roomId se obtiene una vez de la URL y no cambia durante la sesión
   const [roomId] = useState(() => new URLSearchParams(window.location.search).get('roomId'));
+  const [urlError] = useState(() => new URLSearchParams(window.location.search).get('error'));
   const [guestName, setGuestName] = useState(localStorage.getItem('jam_guest_name') || '');
   const [showNickModal, setShowNickModal] = useState(false);
   const [nickInput, setNickInput] = useState('');
@@ -851,6 +852,15 @@ function App() {
           <p style={{ color: 'var(--text-secondary)' }}>
             Comparte la cola de reproducción de Spotify en tu sala o fiesta. Cualquiera puede agregar canciones escaneando un código QR.
           </p>
+
+          {urlError === 'not_authorized' && (
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '0.75rem', padding: '1rem 1.25rem', textAlign: 'left' }}>
+              <p style={{ color: '#f87171', fontWeight: 700, marginBottom: '0.4rem' }}>Acceso no permitido</p>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+                Tu cuenta de Spotify no está registrada para usar esta aplicación. Contacta al administrador para que te agregue a la lista de acceso.
+              </p>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <a href="/api/auth/login" className="btn-primary" style={{ textDecoration: 'none' }}>
