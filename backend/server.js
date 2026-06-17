@@ -83,6 +83,7 @@ function createEmptyRoomState() {
     lastSpotifyFetchTime: 0,
     lastForcedUri: null,
     lastAutoEndedUri: null,
+    lastPlaybackSample: null,
     spotifyFetchPromise: null
   };
 }
@@ -680,11 +681,25 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
 
             room.currentTrackState = currentlyPlaying;
 
-            // Detectar fin natural de canción: Spotify reporta isPlaying:false cerca del final
-            // antes de pasar a 204 (comportamiento estándar del Web Playback SDK y apps nativas)
+            // Detectar fin natural de canción. Al terminar una pista sin nada en la
+            // cola nativa de Spotify, isPlaying pasa a false. El progreso reportado
+            // depende del reproductor:
+            //   (a) apps nativas / REST: queda fijado cerca de la duración.
+            //   (b) Web Playback SDK: REINICIA position a 0 manteniendo la misma pista
+            //       (quirk documentado) — el caso que rompía el auto-avance.
+            const prevProgress = (room.lastPlaybackSample && room.lastPlaybackSample.uri === currentlyPlaying.uri)
+              ? room.lastPlaybackSample.progressMs
+              : null;
+            const remainingMs = currentlyPlaying.durationMs - currentlyPlaying.progressMs;
+            const endedNearDuration = remainingMs < 2000;
+            // Reinicio a ~0 tras haber estado cerca del final en el sondeo anterior
+            const endedWithReset = currentlyPlaying.progressMs < 2000 &&
+              prevProgress !== null &&
+              (currentlyPlaying.durationMs - prevProgress) < 5000;
+
             if (!currentlyPlaying.isPlaying &&
                 currentlyPlaying.durationMs > 0 &&
-                (currentlyPlaying.durationMs - currentlyPlaying.progressMs) < 2000 &&
+                (endedNearDuration || endedWithReset) &&
                 room.lastAutoEndedUri !== currentlyPlaying.uri) {
 
               room.lastAutoEndedUri = currentlyPlaying.uri;
@@ -730,6 +745,10 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
 
               room.currentTrackState = null;
             }
+
+            // Guardar la muestra de progreso para detectar el reinicio-a-0 del
+            // Web Playback SDK en el siguiente sondeo.
+            room.lastPlaybackSample = { uri: currentlyPlaying.uri, progressMs: currentlyPlaying.progressMs };
           }
         } else if (playbackResponse.status === 204) {
           // Reproductor completamente detenido: guardar historial y auto-avanzar
