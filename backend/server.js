@@ -14,12 +14,31 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const publicLimiter = rateLimit({
+// Búsqueda: frecuente por el debounce de escritura (una request por carácter ~400ms)
+const searchLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: 120,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Demasiadas solicitudes. Intenta de nuevo en un momento.' }
+  message: { error: 'Demasiadas búsquedas. Intenta de nuevo en un momento.' }
+});
+
+// Cola: agregar canciones no debería ser tan frecuente
+const queueLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas canciones agregadas. Espera un momento.' }
+});
+
+// Unirse como invitado: acción puntual, límite bajo
+const guestJoinLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de acceso. Intenta de nuevo en un momento.' }
 });
 
 app.use(cors({
@@ -431,7 +450,7 @@ app.get('/api/rooms/:roomId/info', roomMiddleware, (req, res) => {
    RUTAS DE INVITADOS
    ========================================================================== */
 
-app.post('/api/rooms/:roomId/guest/join', publicLimiter, roomMiddleware, (req, res) => {
+app.post('/api/rooms/:roomId/guest/join', guestJoinLimiter, roomMiddleware, (req, res) => {
   const { name } = req.body;
   if (!name || name.trim() === '') {
     return res.status(400).json({ error: 'Nombre de usuario requerido.' });
@@ -972,7 +991,7 @@ app.put('/api/rooms/:roomId/playback/volume', roomMiddleware, hostAuthMiddleware
    RUTAS DE BÚSQUEDA Y COLA
    ========================================================================== */
 
-app.get('/api/rooms/:roomId/search', publicLimiter, roomMiddleware, async (req, res) => {
+app.get('/api/rooms/:roomId/search', searchLimiter, roomMiddleware, async (req, res) => {
   const query = req.query.q;
   if (!query) return res.json([]);
   try {
@@ -1002,7 +1021,7 @@ app.get('/api/rooms/:roomId/queue', roomMiddleware, (req, res) => {
   res.json(req.room.jamQueue);
 });
 
-app.post('/api/rooms/:roomId/queue', publicLimiter, roomMiddleware, async (req, res) => {
+app.post('/api/rooms/:roomId/queue', queueLimiter, roomMiddleware, async (req, res) => {
   const { uri, name, artists, albumArt, addedBy } = req.body;
   if (!uri) return res.status(400).json({ error: 'Falta URI de la canción.' });
 
