@@ -63,6 +63,7 @@ function createEmptyRoomState() {
     cachedSpotifyPlayback: null,
     lastSpotifyFetchTime: 0,
     lastForcedUri: null,
+    lastAutoEndedUri: null,
     spotifyFetchPromise: null
   };
 }
@@ -649,51 +650,87 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
             }
 
             room.currentTrackState = currentlyPlaying;
-          }
-        } else if (playbackResponse.status === 204 || (currentlyPlaying && !currentlyPlaying.isPlaying)) {
-          // Fin natural = reproductor detenido (204) o canción pausada a <2s del final
-          // (Spotify reporta isPlaying:false brevemente antes de 204 al terminar una canción)
-          const isNaturalEnd = playbackResponse.status === 204 ||
-            (currentlyPlaying.durationMs > 0 &&
-             (currentlyPlaying.durationMs - currentlyPlaying.progressMs) < 2000);
 
-          if (isNaturalEnd) {
-            if (room.currentTrackState) {
+            // Detectar fin natural de canción: Spotify reporta isPlaying:false cerca del final
+            // antes de pasar a 204 (comportamiento estándar del Web Playback SDK y apps nativas)
+            if (!currentlyPlaying.isPlaying &&
+                currentlyPlaying.durationMs > 0 &&
+                (currentlyPlaying.durationMs - currentlyPlaying.progressMs) < 2000 &&
+                room.lastAutoEndedUri !== currentlyPlaying.uri) {
+
+              room.lastAutoEndedUri = currentlyPlaying.uri;
+
               const alreadyLogged = room.jamHistory.some(h =>
-                h.uri === room.currentTrackState.uri && (Date.now() - h.playedAt) < 10000
+                h.uri === currentlyPlaying.uri && (Date.now() - h.playedAt) < 10000
               );
               if (!alreadyLogged) {
-                const matchedItem = room.jamQueue.find(i => i.uri === room.currentTrackState.uri)
-                  || room.jamHistory.find(i => i.uri === room.currentTrackState.uri);
+                const matchedItem = room.jamQueue.find(i => i.uri === currentlyPlaying.uri)
+                  || room.jamHistory.find(i => i.uri === currentlyPlaying.uri);
                 room.jamHistory.unshift({
-                  id: `${room.currentTrackState.uri}-${Date.now()}`,
-                  uri: room.currentTrackState.uri,
-                  name: room.currentTrackState.name,
-                  artists: room.currentTrackState.artists,
-                  albumArt: room.currentTrackState.albumArt,
+                  id: `${currentlyPlaying.uri}-${Date.now()}`,
+                  uri: currentlyPlaying.uri,
+                  name: currentlyPlaying.name,
+                  artists: currentlyPlaying.artists,
+                  albumArt: currentlyPlaying.albumArt,
                   addedBy: matchedItem?.addedBy || 'Sistema / Spotify',
                   playedAt: Date.now()
                 });
                 if (room.jamHistory.length > 30) room.jamHistory.pop();
                 persistRoom(req.roomId);
               }
-            }
 
-            if (room.jamQueue.length > 0) {
-              const nextTrack = room.jamQueue[0];
-              console.log(`[Queue Sync] Sala ${req.roomId}: reproduciendo siguiente de cola: ${nextTrack.name}`);
+              if (room.jamQueue.length > 0) {
+                const nextTrack = room.jamQueue[0];
+                console.log(`[Queue Sync] Sala ${req.roomId}: fin natural, reproduciendo siguiente: ${nextTrack.name}`);
+                fetch('https://api.spotify.com/v1/me/player/play', {
+                  method: 'PUT',
+                  headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ uris: [nextTrack.uri] })
+                }).catch(() => {});
+                room.lastForcedUri = nextTrack.uri;
+              }
+
+              room.currentTrackState = null;
+            }
+          }
+        } else if (playbackResponse.status === 204) {
+          // Reproductor completamente detenido: guardar historial y auto-avanzar
+          // (si near-end ya disparó, lastForcedUri evita doble play command)
+          if (room.currentTrackState) {
+            const alreadyLogged = room.jamHistory.some(h =>
+              h.uri === room.currentTrackState.uri && (Date.now() - h.playedAt) < 10000
+            );
+            if (!alreadyLogged) {
+              const matchedItem = room.jamQueue.find(i => i.uri === room.currentTrackState.uri)
+                || room.jamHistory.find(i => i.uri === room.currentTrackState.uri);
+              room.jamHistory.unshift({
+                id: `${room.currentTrackState.uri}-${Date.now()}`,
+                uri: room.currentTrackState.uri,
+                name: room.currentTrackState.name,
+                artists: room.currentTrackState.artists,
+                albumArt: room.currentTrackState.albumArt,
+                addedBy: matchedItem?.addedBy || 'Sistema / Spotify',
+                playedAt: Date.now()
+              });
+              if (room.jamHistory.length > 30) room.jamHistory.pop();
+              persistRoom(req.roomId);
+            }
+          }
+
+          if (room.jamQueue.length > 0) {
+            const nextTrack = room.jamQueue[0];
+            if (room.lastForcedUri !== nextTrack.uri) {
+              console.log(`[Queue Sync] Sala ${req.roomId}: 204 detectado, reproduciendo siguiente: ${nextTrack.name}`);
               fetch('https://api.spotify.com/v1/me/player/play', {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ uris: [nextTrack.uri] })
               }).catch(() => {});
+              room.lastForcedUri = nextTrack.uri;
             }
-
-            room.currentTrackState = null;
-          } else {
-            // Pausa manual: actualizar estado sin auto-avanzar ni guardar historial
-            room.currentTrackState = currentlyPlaying;
           }
+
+          room.currentTrackState = null;
         }
 
         room.cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
@@ -810,11 +847,14 @@ app.post('/api/rooms/:roomId/playback/next', roomMiddleware, hostAuthMiddleware,
       if (response.status === 204 || response.ok) {
         // Agregar al historial la canción que se está saltando (la actual)
         if (room.currentTrackState) {
-          const matchedItem = room.jamQueue.find(i => i.uri === room.currentTrackState.uri);
-          const addedBy = matchedItem
-            ? matchedItem.addedBy
-            : (room.jamHistory.find(i => i.uri === room.currentTrackState.uri)?.addedBy || 'Sistema / Spotify');
-          if (room.jamHistory.length === 0 || room.jamHistory[0].uri !== room.currentTrackState.uri) {
+          const alreadyInHistory = room.jamHistory.some(h =>
+            h.uri === room.currentTrackState.uri && (Date.now() - h.playedAt) < 10000
+          );
+          if (!alreadyInHistory) {
+            const matchedItem = room.jamQueue.find(i => i.uri === room.currentTrackState.uri);
+            const addedBy = matchedItem
+              ? matchedItem.addedBy
+              : (room.jamHistory.find(i => i.uri === room.currentTrackState.uri)?.addedBy || 'Sistema / Spotify');
             room.jamHistory.unshift({
               id: `${room.currentTrackState.uri}-${Date.now()}`,
               uri: room.currentTrackState.uri,
@@ -1061,6 +1101,16 @@ app.delete('/api/rooms/:roomId/queue/:id', roomMiddleware, (req, res) => {
   persistRoom(req.roomId);
   invalidatePlaybackCache(room);
   res.json({ success: true, queue: room.jamQueue });
+});
+
+app.delete('/api/rooms/:roomId/history/:id', roomMiddleware, hostAuthMiddleware, (req, res) => {
+  const { id } = req.params;
+  const room = req.room;
+  const index = room.jamHistory.findIndex(item => item.id === id);
+  if (index === -1) return res.status(404).json({ error: 'Entrada de historial no encontrada.' });
+  room.jamHistory.splice(index, 1);
+  persistRoom(req.roomId);
+  res.json({ success: true, history: room.jamHistory });
 });
 
 app.put('/api/rooms/:roomId/queue/reorder', roomMiddleware, hostAuthMiddleware, (req, res) => {

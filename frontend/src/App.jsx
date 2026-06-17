@@ -565,6 +565,16 @@ function App() {
       .catch(err => console.error('Error cargando dispositivos:', err));
   };
 
+  const removeFromHistory = (itemId) => {
+    fetch(r(`/history/${itemId}`), {
+      method: 'DELETE',
+      headers: { ...(hostToken ? { 'X-Host-Token': hostToken } : {}) }
+    })
+      .then(res => res.json())
+      .then(data => { if (data.history) setHistory(data.history); })
+      .catch(err => console.error('Error al eliminar del historial:', err));
+  };
+
   const removeFromQueue = (itemId) => {
     const url = r(`/queue/${itemId}${guestName ? `?guestName=${encodeURIComponent(guestName)}` : ''}`);
     fetch(url, {
@@ -1494,14 +1504,24 @@ function App() {
                         </div>
                         <div style={{ display: 'flex', gap: '0.25rem' }}>
                           {appMode === 'host' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }}
-                              className="btn-icon"
-                              style={{ padding: '0.35rem', color: 'var(--spotify-green)', background: 'rgba(29, 185, 84, 0.1)', borderRadius: '50%' }}
-                              title="Reproducir ahora"
-                            >
-                              <Icons.Play style={{ width: '12px', height: '12px' }} />
-                            </button>
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }}
+                                className="btn-icon"
+                                style={{ padding: '0.35rem', color: 'var(--spotify-green)', background: 'rgba(29, 185, 84, 0.1)', borderRadius: '50%' }}
+                                title="Reproducir ahora"
+                              >
+                                <Icons.Play style={{ width: '12px', height: '12px' }} />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); removeFromHistory(item.id); }}
+                                className="btn-icon"
+                                style={{ padding: '0.35rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderRadius: '50%' }}
+                                title="Eliminar del historial"
+                              >
+                                <Icons.Trash style={{ width: '12px', height: '12px' }} />
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={(e) => { e.stopPropagation(); addToQueue(item); }}
