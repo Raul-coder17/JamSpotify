@@ -611,6 +611,7 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
             if (room.currentTrackState && room.currentTrackState.id !== currentlyPlaying.id) {
               const isForcedTransition = room.lastForcedUri !== null && room.lastForcedUri === currentlyPlaying.uri;
               if (isForcedTransition) room.lastForcedUri = null;
+              room.lastAutoEndedUri = null;
 
               if (room.jamQueue.length > 0 && !isForcedTransition) {
                 const nextExpected = room.jamQueue[0];
@@ -620,8 +621,17 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
                     method: 'PUT',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ uris: [nextExpected.uri] })
-                  }).catch(() => {});
-                  room.lastForcedUri = nextExpected.uri;
+                  })
+                  .then(res => {
+                    if (res.ok || res.status === 204) {
+                      room.lastForcedUri = nextExpected.uri;
+                    } else {
+                      room.lastForcedUri = null;
+                    }
+                  })
+                  .catch(() => {
+                    room.lastForcedUri = null;
+                  });
 
                   room.currentTrackState = currentlyPlaying;
                   room.cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
@@ -705,8 +715,17 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
                   method: 'PUT',
                   headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                   body: JSON.stringify({ uris: [nextTrack.uri] })
-                }).catch(() => {});
-                room.lastForcedUri = nextTrack.uri;
+                })
+                .then(res => {
+                  if (res.ok || res.status === 204) {
+                    room.lastForcedUri = nextTrack.uri;
+                  } else {
+                    room.lastForcedUri = null;
+                  }
+                })
+                .catch(() => {
+                  room.lastForcedUri = null;
+                });
               }
 
               room.currentTrackState = null;
@@ -744,8 +763,17 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ uris: [nextTrack.uri] })
-              }).catch(() => {});
-              room.lastForcedUri = nextTrack.uri;
+              })
+              .then(res => {
+                if (res.ok || res.status === 204) {
+                  room.lastForcedUri = nextTrack.uri;
+                } else {
+                  room.lastForcedUri = null;
+                }
+              })
+              .catch(() => {
+                room.lastForcedUri = null;
+              });
             }
           }
 
