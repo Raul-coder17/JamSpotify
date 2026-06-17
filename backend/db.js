@@ -49,7 +49,11 @@ async function initSchema() {
 
 function encryptToken(token) {
   const key = process.env.TOKEN_ENCRYPTION_KEY;
-  if (!key || !token) return token || '';
+  if (!token) return '';
+  if (!key) {
+    console.warn('[SECURITY] TOKEN_ENCRYPTION_KEY no configurado — tokens Spotify guardados en texto plano.');
+    return token;
+  }
   try {
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key, 'hex'), iv);
@@ -61,9 +65,13 @@ function encryptToken(token) {
 
 function decryptToken(encrypted) {
   const key = process.env.TOKEN_ENCRYPTION_KEY;
-  if (!key || !encrypted || !encrypted.includes(':')) return encrypted || '';
+  if (!key || !encrypted) return encrypted || '';
   try {
-    const [ivHex, data] = encrypted.split(':');
+    const colonIdx = encrypted.indexOf(':');
+    if (colonIdx === -1) return encrypted;
+    const ivHex = encrypted.slice(0, colonIdx);
+    if (ivHex.length !== 32) throw new Error('IV length mismatch');
+    const data = encrypted.slice(colonIdx + 1);
     const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key, 'hex'), Buffer.from(ivHex, 'hex'));
     return decipher.update(data, 'hex', 'utf8') + decipher.final('utf8');
   } catch {
@@ -146,4 +154,46 @@ async function deleteRoom(roomId) {
   }
 }
 
-module.exports = { initSchema, saveRoom, loadRoom, deleteRoom };
+async function loadRoomBySpotifyId(spotifyId) {
+  const p = getPool();
+  if (!p) return null;
+  try {
+    const result = await p.query(
+      'SELECT * FROM rooms WHERE host_spotify_id = $1 ORDER BY last_active_at DESC LIMIT 1',
+      [spotifyId]
+    );
+    if (!result.rows.length) return null;
+    const r = result.rows[0];
+    return {
+      id: r.id,
+      hostSpotifyId: r.host_spotify_id,
+      hostName: r.host_name,
+      hostToken: r.host_token,
+      accessToken: decryptToken(r.access_token),
+      refreshToken: decryptToken(r.refresh_token),
+      expiresAt: Number(r.expires_at),
+      jamQueue: r.jam_queue || [],
+      jamHistory: r.jam_history || [],
+      pendingGuests: r.pending_guests || {},
+      guestTokens: r.guest_tokens || {}
+    };
+  } catch (err) {
+    console.error('[DB] Error al buscar sala por Spotify ID:', err.message);
+    return null;
+  }
+}
+
+async function deleteRoomsBySpotifyId(spotifyId, keepRoomId) {
+  const p = getPool();
+  if (!p) return;
+  try {
+    await p.query(
+      'DELETE FROM rooms WHERE host_spotify_id = $1 AND id != $2',
+      [spotifyId, keepRoomId]
+    );
+  } catch (err) {
+    console.error('[DB] Error al eliminar salas duplicadas:', err.message);
+  }
+}
+
+module.exports = { initSchema, saveRoom, loadRoom, loadRoomBySpotifyId, deleteRoom, deleteRoomsBySpotifyId };

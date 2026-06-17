@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 const path = require('path');
 const fs = require('fs');
@@ -13,9 +14,17 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const publicLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Intenta de nuevo en un momento.' }
+});
+
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? (process.env.FRONTEND_URL || true)
+    ? (process.env.FRONTEND_URL || 'https://jamspotify.onrender.com')
     : 'http://localhost:5173',
   credentials: true
 }));
@@ -141,7 +150,7 @@ async function fetchHostSpotifyId(accessToken) {
   return null;
 }
 
-async function refreshRoomToken(room) {
+async function refreshRoomToken(roomId, room) {
   if (!room.refreshToken) throw new Error('No hay refresh token disponible.');
 
   const authHeader = Buffer.from(
@@ -167,14 +176,15 @@ async function refreshRoomToken(room) {
   room.accessToken = data.access_token;
   room.expiresAt = Date.now() + data.expires_in * 1000;
   if (data.refresh_token) room.refreshToken = data.refresh_token;
+  persistRoom(roomId);
 
   return room.accessToken;
 }
 
-async function getValidRoomToken(room) {
+async function getValidRoomToken(roomId, room) {
   if (!room.accessToken) throw new Error('El Host no está autenticado con Spotify.');
   if (Date.now() + 300000 > room.expiresAt) {
-    return await refreshRoomToken(room);
+    return await refreshRoomToken(roomId, room);
   }
   return room.accessToken;
 }
@@ -205,7 +215,7 @@ function isHostRequest(req) {
   const room = req.room;
   if (!room || !room.hostToken) return false;
   const cookieToken = req.cookies.jam_host_token;
-  const headerToken = req.headers['x-host-token'] || req.query.hostToken;
+  const headerToken = req.headers['x-host-token'];
   return cookieToken === room.hostToken || headerToken === room.hostToken;
 }
 
@@ -292,21 +302,33 @@ app.get('/api/callback', async (req, res) => {
       return res.redirect(getRedirectUrl('/?error=not_authorized'));
     }
 
-    // Crear sala nueva con UUID
-    const roomId = crypto.randomUUID();
+    // Obtener perfil del host
+    const [spotifyId, hostName] = await Promise.all([
+      fetchHostSpotifyId(data.access_token),
+      fetchHostProfileName(data.access_token)
+    ]);
+
+    // Reutilizar sala existente si el host ya tiene una, para evitar duplicados
+    const existingRoom = spotifyId ? await db.loadRoomBySpotifyId(spotifyId) : null;
+    const roomId = existingRoom ? existingRoom.id : crypto.randomUUID();
     const room = getOrCreateRoomState(roomId);
 
+    if (existingRoom) {
+      Object.assign(room, existingRoom);
+      // Limpiar salas duplicadas del mismo host que pudieran existir
+      db.deleteRoomsBySpotifyId(spotifyId, roomId).catch(() => {});
+      console.log(`[Auth] Sala reutilizada: ${roomId} para host: ${hostName}`);
+    } else {
+      console.log(`[Auth] Sala creada: ${roomId} para host: ${hostName}`);
+    }
+
+    // Actualizar siempre los tokens (pueden haber expirado o rotado)
     room.accessToken = data.access_token;
     room.refreshToken = data.refresh_token;
     room.expiresAt = Date.now() + data.expires_in * 1000;
-    room.hostToken = crypto.randomBytes(16).toString('hex');
-
-    const [spotifyId, hostName] = await Promise.all([
-      fetchHostSpotifyId(room.accessToken),
-      fetchHostProfileName(room.accessToken)
-    ]);
     room.hostSpotifyId = spotifyId || '';
     room.hostName = hostName || 'Anfitrión';
+    if (!room.hostToken) room.hostToken = crypto.randomBytes(16).toString('hex');
 
     await db.saveRoom(roomId, {
       hostSpotifyId: room.hostSpotifyId,
@@ -321,8 +343,6 @@ app.get('/api/callback', async (req, res) => {
       guestTokens: room.guestTokens
     });
 
-    console.log(`[Auth] Sala creada: ${roomId} para host: ${room.hostName}`);
-
     if (isProd) {
       res.cookie('jam_host_token', room.hostToken, {
         httpOnly: true,
@@ -332,7 +352,13 @@ app.get('/api/callback', async (req, res) => {
       });
       res.redirect(`/?roomId=${roomId}`);
     } else {
-      res.redirect(`http://localhost:5173/?roomId=${roomId}#host_token=${room.hostToken}`);
+      res.cookie('jam_host_token_dev', room.hostToken, {
+        httpOnly: false,
+        secure: false,
+        sameSite: 'lax',
+        maxAge: 60 * 1000
+      });
+      res.redirect(`http://localhost:5173/?roomId=${roomId}`);
     }
   } catch (error) {
     console.error('[Error Callback]', error);
@@ -357,7 +383,7 @@ app.get('/api/rooms/:roomId/auth/status', roomMiddleware, (req, res) => {
 // Token de acceso de Spotify (solo host, para el Web Playback SDK)
 app.get('/api/rooms/:roomId/auth/token', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     res.json({ accessToken: token });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -404,7 +430,7 @@ app.get('/api/rooms/:roomId/info', roomMiddleware, (req, res) => {
    RUTAS DE INVITADOS
    ========================================================================== */
 
-app.post('/api/rooms/:roomId/guest/join', roomMiddleware, (req, res) => {
+app.post('/api/rooms/:roomId/guest/join', publicLimiter, roomMiddleware, (req, res) => {
   const { name } = req.body;
   if (!name || name.trim() === '') {
     return res.status(400).json({ error: 'Nombre de usuario requerido.' });
@@ -451,6 +477,15 @@ app.get('/api/rooms/:roomId/guest/status', roomMiddleware, (req, res) => {
 
   const cleanName = name.trim();
   const room = req.room;
+
+  const assignedToken = room.guestTokens[cleanName];
+  if (assignedToken) {
+    const providedToken = req.headers['x-guest-token'];
+    if (!providedToken || providedToken !== assignedToken) {
+      return res.status(403).json({ error: 'Token de invitado requerido.' });
+    }
+  }
+
   const status = room.pendingGuests[cleanName] || 'not_requested';
 
   if (status === 'approved') {
@@ -520,7 +555,7 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
     if (cacheExpired && !room.spotifyFetchPromise) {
       // Solo un fetch simultáneo por sala — las demás requests esperan a esta promesa
       room.spotifyFetchPromise = (async () => {
-        const token = await getValidRoomToken(room);
+        const token = await getValidRoomToken(req.roomId, room);
 
         const playbackResponse = await fetch('https://api.spotify.com/v1/me/player', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -566,6 +601,7 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ uris: [nextExpected.uri] })
                   }).catch(() => {});
+                  room.lastForcedUri = nextExpected.uri;
 
                   room.currentTrackState = currentlyPlaying;
                   room.cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
@@ -580,7 +616,10 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
                                   room.jamHistory.find(i => i.uri === room.currentTrackState.uri);
               const addedBy = matchedItem ? matchedItem.addedBy : 'Sistema / Spotify';
 
-              if (room.jamHistory.length === 0 || room.jamHistory[0].uri !== room.currentTrackState.uri) {
+              const alreadyInHistory = room.jamHistory.some(h =>
+                h.uri === room.currentTrackState.uri && (Date.now() - h.playedAt) < 10000
+              );
+              if (!alreadyInHistory) {
                 room.jamHistory.unshift({
                   id: `${room.currentTrackState.uri}-${Date.now()}`,
                   uri: room.currentTrackState.uri,
@@ -612,19 +651,44 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
             room.currentTrackState = currentlyPlaying;
           }
         } else if (playbackResponse.status === 204 || (currentlyPlaying && !currentlyPlaying.isPlaying)) {
-          const wasNearEnd = room.currentTrackState &&
-            (room.currentTrackState.durationMs - room.currentTrackState.progressMs < 5000);
+          if (playbackResponse.status === 204) {
+            // Reproductor detenido por completo: guardar historial y auto-avanzar
+            if (room.currentTrackState) {
+              const alreadyLogged = room.jamHistory.some(h =>
+                h.uri === room.currentTrackState.uri && (Date.now() - h.playedAt) < 10000
+              );
+              if (!alreadyLogged) {
+                const matchedItem = room.jamQueue.find(i => i.uri === room.currentTrackState.uri)
+                  || room.jamHistory.find(i => i.uri === room.currentTrackState.uri);
+                room.jamHistory.unshift({
+                  id: `${room.currentTrackState.uri}-${Date.now()}`,
+                  uri: room.currentTrackState.uri,
+                  name: room.currentTrackState.name,
+                  artists: room.currentTrackState.artists,
+                  albumArt: room.currentTrackState.albumArt,
+                  addedBy: matchedItem?.addedBy || 'Sistema / Spotify',
+                  playedAt: Date.now()
+                });
+                if (room.jamHistory.length > 30) room.jamHistory.pop();
+                persistRoom(req.roomId);
+              }
+            }
 
-          if ((playbackResponse.status === 204 || wasNearEnd) && room.jamQueue.length > 0) {
-            const nextTrack = room.jamQueue[0];
-            console.log(`[Queue Sync] Sala ${req.roomId}: reproduciendo siguiente de cola: ${nextTrack.name}`);
-            fetch('https://api.spotify.com/v1/me/player/play', {
-              method: 'PUT',
-              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ uris: [nextTrack.uri] })
-            }).catch(() => {});
+            if (room.jamQueue.length > 0) {
+              const nextTrack = room.jamQueue[0];
+              console.log(`[Queue Sync] Sala ${req.roomId}: reproduciendo siguiente de cola: ${nextTrack.name}`);
+              fetch('https://api.spotify.com/v1/me/player/play', {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uris: [nextTrack.uri] })
+              }).catch(() => {});
+            }
+
+            room.currentTrackState = null;
+          } else {
+            // Usuario pausó manualmente: actualizar estado sin auto-avanzar ni guardar historial
+            room.currentTrackState = currentlyPlaying;
           }
-          room.currentTrackState = null;
         }
 
         room.cachedSpotifyPlayback = { currentlyPlaying, activeDevice };
@@ -653,7 +717,7 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
 
 app.get('/api/rooms/:roomId/playback/devices', roomMiddleware, async (req, res) => {
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player/devices', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -669,7 +733,7 @@ app.post('/api/rooms/:roomId/playback/transfer', roomMiddleware, hostAuthMiddlew
   const { deviceId } = req.body;
   if (!deviceId) return res.status(400).json({ error: 'Falta deviceId' });
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player', {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -688,7 +752,7 @@ app.post('/api/rooms/:roomId/playback/transfer', roomMiddleware, hostAuthMiddlew
 
 app.put('/api/rooms/:roomId/playback/pause', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player/pause', {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}` }
@@ -707,7 +771,7 @@ app.put('/api/rooms/:roomId/playback/pause', roomMiddleware, hostAuthMiddleware,
 app.put('/api/rooms/:roomId/playback/play', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   const { uris } = req.body || {};
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     const options = { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } };
     if (uris && Array.isArray(uris)) {
       options.headers['Content-Type'] = 'application/json';
@@ -728,7 +792,7 @@ app.put('/api/rooms/:roomId/playback/play', roomMiddleware, hostAuthMiddleware, 
 app.post('/api/rooms/:roomId/playback/next', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   const room = req.room;
   try {
-    const token = await getValidRoomToken(room);
+    const token = await getValidRoomToken(req.roomId, room);
 
     if (room.jamQueue.length > 0) {
       const nextTrack = room.jamQueue[0];
@@ -785,7 +849,7 @@ app.post('/api/rooms/:roomId/playback/next', roomMiddleware, hostAuthMiddleware,
 
 app.post('/api/rooms/:roomId/playback/previous', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     const response = await fetch('https://api.spotify.com/v1/me/player/previous', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` }
@@ -804,7 +868,7 @@ app.post('/api/rooms/:roomId/playback/previous', roomMiddleware, hostAuthMiddlew
 app.post('/api/rooms/:roomId/playback/seek', roomMiddleware, hostAuthMiddleware, async (req, res) => {
   let { positionMs, relativeMs } = req.body;
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
 
     if (relativeMs !== undefined) {
       const playResponse = await fetch('https://api.spotify.com/v1/me/player', {
@@ -843,7 +907,7 @@ app.put('/api/rooms/:roomId/playback/volume', roomMiddleware, hostAuthMiddleware
     return res.status(400).json({ error: 'Volumen inválido (0–100).' });
   }
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     const response = await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${volumePercent}`, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}` }
@@ -863,11 +927,11 @@ app.put('/api/rooms/:roomId/playback/volume', roomMiddleware, hostAuthMiddleware
    RUTAS DE BÚSQUEDA Y COLA
    ========================================================================== */
 
-app.get('/api/rooms/:roomId/search', roomMiddleware, async (req, res) => {
+app.get('/api/rooms/:roomId/search', publicLimiter, roomMiddleware, async (req, res) => {
   const query = req.query.q;
   if (!query) return res.json([]);
   try {
-    const token = await getValidRoomToken(req.room);
+    const token = await getValidRoomToken(req.roomId, req.room);
     const response = await fetch(
       'https://api.spotify.com/v1/search?' + new URLSearchParams({ q: query, type: 'track', limit: 15 }),
       { headers: { 'Authorization': `Bearer ${token}` } }
@@ -893,14 +957,11 @@ app.get('/api/rooms/:roomId/queue', roomMiddleware, (req, res) => {
   res.json(req.room.jamQueue);
 });
 
-app.post('/api/rooms/:roomId/queue', roomMiddleware, async (req, res) => {
+app.post('/api/rooms/:roomId/queue', publicLimiter, roomMiddleware, async (req, res) => {
   const { uri, name, artists, albumArt, addedBy } = req.body;
   if (!uri) return res.status(400).json({ error: 'Falta URI de la canción.' });
 
   const room = req.room;
-  const isDuplicate = room.jamQueue.some(item => item.uri === uri);
-  if (isDuplicate) return res.status(400).json({ error: 'Esta canción ya está en la cola.' });
-
   const guestName = addedBy ? addedBy.trim() : 'Anónimo';
   const isHost = isHostRequest(req);
 
@@ -916,8 +977,20 @@ app.post('/api/rooms/:roomId/queue', roomMiddleware, async (req, res) => {
     }
   }
 
+  // Verificar duplicado y reservar slot ANTES de cualquier await para evitar race condition
+  const isDuplicate = room.jamQueue.some(item => item.uri === uri);
+  if (isDuplicate) return res.status(400).json({ error: 'Esta canción ya está en la cola.' });
+
+  const queueItem = {
+    id: `${uri}-${Date.now()}`,
+    uri, name, artists, albumArt,
+    addedBy: guestName,
+    addedAt: Date.now()
+  };
+  room.jamQueue.push(queueItem);
+
   try {
-    const token = await getValidRoomToken(room);
+    const token = await getValidRoomToken(req.roomId, room);
 
     const playbackCheck = await fetch('https://api.spotify.com/v1/me/player', {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -929,15 +1002,6 @@ app.post('/api/rooms/:roomId/queue', roomMiddleware, async (req, res) => {
       if (pbData && pbData.item) isIdle = false;
     }
 
-    // Reservar slot en la cola ANTES del await a Spotify (evita race condition)
-    const queueItem = {
-      id: `${uri}-${Date.now()}`,
-      uri, name, artists, albumArt,
-      addedBy: guestName,
-      addedAt: Date.now()
-    };
-    room.jamQueue.push(queueItem);
-
     if (room.jamQueue.length === 1 && isIdle) {
       console.log(`[Queue] Sala ${req.roomId}: reproductor inactivo, reproduciendo directamente: ${name}`);
       const playResponse = await fetch('https://api.spotify.com/v1/me/player/play', {
@@ -946,7 +1010,7 @@ app.post('/api/rooms/:roomId/queue', roomMiddleware, async (req, res) => {
         body: JSON.stringify({ uris: [uri] })
       });
       if (!playResponse.ok && playResponse.status === 404) {
-        room.jamQueue.pop(); // revertir
+        room.jamQueue = room.jamQueue.filter(i => i.id !== queueItem.id);
         return res.status(404).json({
           error: 'No se detecta reproducción activa. El anfitrión debe abrir Spotify primero.'
         });

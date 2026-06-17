@@ -151,13 +151,13 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
 
-    // En desarrollo el OAuth callback redirige con el token en #host_token=...
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    const tokenFromHash = hash.get('host_token');
-    if (tokenFromHash) {
-      setHostToken(tokenFromHash);
-      localStorage.setItem('jam_host_token', tokenFromHash);
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    // En desarrollo el OAuth callback setea una cookie temporal 'jam_host_token_dev'
+    const devCookie = document.cookie.split('; ').find(c => c.startsWith('jam_host_token_dev='));
+    const tokenFromCookie = devCookie ? devCookie.split('=')[1] : null;
+    if (tokenFromCookie) {
+      setHostToken(tokenFromCookie);
+      localStorage.setItem('jam_host_token', tokenFromCookie);
+      document.cookie = 'jam_host_token_dev=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     }
 
     // Info de red/sala (para QR y nombre del host)
