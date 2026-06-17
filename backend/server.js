@@ -651,8 +651,13 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
             room.currentTrackState = currentlyPlaying;
           }
         } else if (playbackResponse.status === 204 || (currentlyPlaying && !currentlyPlaying.isPlaying)) {
-          if (playbackResponse.status === 204) {
-            // Reproductor detenido por completo: guardar historial y auto-avanzar
+          // Fin natural = reproductor detenido (204) o canción pausada a <2s del final
+          // (Spotify reporta isPlaying:false brevemente antes de 204 al terminar una canción)
+          const isNaturalEnd = playbackResponse.status === 204 ||
+            (currentlyPlaying.durationMs > 0 &&
+             (currentlyPlaying.durationMs - currentlyPlaying.progressMs) < 2000);
+
+          if (isNaturalEnd) {
             if (room.currentTrackState) {
               const alreadyLogged = room.jamHistory.some(h =>
                 h.uri === room.currentTrackState.uri && (Date.now() - h.playedAt) < 10000
@@ -686,7 +691,7 @@ app.get('/api/rooms/:roomId/playback', roomMiddleware, async (req, res) => {
 
             room.currentTrackState = null;
           } else {
-            // Usuario pausó manualmente: actualizar estado sin auto-avanzar ni guardar historial
+            // Pausa manual: actualizar estado sin auto-avanzar ni guardar historial
             room.currentTrackState = currentlyPlaying;
           }
         }

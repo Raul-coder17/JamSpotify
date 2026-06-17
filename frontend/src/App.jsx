@@ -136,6 +136,14 @@ function App() {
 
   // Ref para barra de progreso
   const progressTimerRef = useRef(null);
+  // Ref para bloquear sincronización de volumen durante ajuste manual
+  const volumeLockedRef = useRef(false);
+  const volumeLockTimerRef = useRef(null);
+  // Ref para comparar progressMs local vs servidor sin re-render extra
+  const currentlyPlayingRef = useRef(null);
+
+  // Mantener ref de currentlyPlaying sincronizado para lecturas sin re-render
+  useEffect(() => { currentlyPlayingRef.current = currentlyPlaying; }, [currentlyPlaying]);
 
   // Helper: construye URLs de sala → /api/rooms/:roomId/<path>
   const r = (path) => `/api/rooms/${roomId}${path}`;
@@ -263,7 +271,17 @@ function App() {
           return res.json();
         })
         .then(data => {
-          setCurrentlyPlaying(data.currentlyPlaying);
+          const serverPlaying = data.currentlyPlaying;
+          const local = currentlyPlayingRef.current;
+          if (serverPlaying && local && serverPlaying.id === local.id) {
+            const delta = Math.abs(serverPlaying.progressMs - local.progressMs);
+            setCurrentlyPlaying(prev => prev ? {
+              ...serverPlaying,
+              progressMs: delta < 2000 ? prev.progressMs : serverPlaying.progressMs
+            } : serverPlaying);
+          } else {
+            setCurrentlyPlaying(serverPlaying);
+          }
           setActiveDevice(data.activeDevice);
           setQueue(data.queue || []);
           setHistory(data.history || []);
@@ -282,7 +300,9 @@ function App() {
   }, [appMode, isAuthenticated, guestApprovalStatus]);
 
   // Sincronizar volumen local con el volumen reportado por Spotify
+  // Omitir si el usuario está ajustando manualmente (lock activo por 2s)
   useEffect(() => {
+    if (volumeLockedRef.current) return;
     if (activeDevice && activeDevice.volume_percent !== undefined) {
       setLocalVolume(activeDevice.volume_percent);
       if (activeDevice.volume_percent > 0) {
@@ -318,10 +338,10 @@ function App() {
           if (prev.progressMs >= prev.durationMs) return prev;
           return {
             ...prev,
-            progressMs: Math.min(prev.progressMs + 1000, prev.durationMs)
+            progressMs: Math.min(prev.progressMs + 250, prev.durationMs)
           };
         });
-      }, 1000);
+      }, 250);
     }
 
     return () => {
@@ -487,6 +507,9 @@ function App() {
   };
 
   const seekRelative = (seconds) => {
+    if (!currentlyPlaying) return;
+    const targetMs = Math.max(0, Math.min(currentlyPlaying.progressMs + seconds * 1000, currentlyPlaying.durationMs));
+    setCurrentlyPlaying(prev => prev ? { ...prev, progressMs: targetMs } : null);
     fetch(r('/playback/seek'), {
       method: 'POST',
       headers: {
@@ -507,10 +530,9 @@ function App() {
     if (!currentlyPlaying) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
-    const width = rect.width;
-    const clickPercent = clickX / width;
-    const targetMs = clickPercent * currentlyPlaying.durationMs;
-
+    const clickPercent = Math.max(0, Math.min(clickX / rect.width, 1));
+    const targetMs = Math.round(clickPercent * currentlyPlaying.durationMs);
+    setCurrentlyPlaying(prev => prev ? { ...prev, progressMs: targetMs } : null);
     fetch(r('/playback/seek'), {
       method: 'POST',
       headers: {
@@ -604,6 +626,9 @@ function App() {
 
   const changeVolume = (newVol) => {
     setLocalVolume(newVol);
+    volumeLockedRef.current = true;
+    if (volumeLockTimerRef.current) clearTimeout(volumeLockTimerRef.current);
+    volumeLockTimerRef.current = setTimeout(() => { volumeLockedRef.current = false; }, 2000);
     fetch(r('/playback/volume'), {
       method: 'PUT',
       headers: {
