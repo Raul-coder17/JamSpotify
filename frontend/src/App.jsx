@@ -141,6 +141,8 @@ function App() {
   const volumeLockTimerRef = useRef(null);
   // Ref para comparar progressMs local vs servidor sin re-render extra
   const currentlyPlayingRef = useRef(null);
+  // Ref para evitar auto-selección repetida del Web Player
+  const hasAutoSelectedDeviceRef = useRef(false);
 
   // Mantener ref de currentlyPlaying sincronizado para lecturas sin re-render
   useEffect(() => { currentlyPlayingRef.current = currentlyPlaying; }, [currentlyPlaying]);
@@ -429,6 +431,32 @@ function App() {
       }
     };
   }, [appMode, isAuthenticated]);
+
+  // Auto-seleccionar el Web Player como dispositivo por defecto al estar listo
+  useEffect(() => {
+    if (webPlayerState !== 'ready' || !webPlayerDeviceId) return;
+    if (appMode !== 'host' || !isAuthenticated) return;
+    if (hasAutoSelectedDeviceRef.current) return;
+    hasAutoSelectedDeviceRef.current = true;
+    fetch(r('/playback/transfer'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(hostToken ? { 'X-Host-Token': hostToken } : {})
+      },
+      body: JSON.stringify({ deviceId: webPlayerDeviceId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          fetch(r('/playback/devices'))
+            .then(res => res.json())
+            .then(d => setDevices(d))
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [webPlayerState, webPlayerDeviceId, appMode, isAuthenticated]);
 
   // Búsqueda con retardo (Debounce)
   useEffect(() => {
@@ -737,6 +765,7 @@ function App() {
         if (res.ok) {
           setQueueStatus(prev => ({ ...prev, [trackIdKey]: 'success' }));
           setQueue(data.queue || []);
+          if (data.warning) setErrorAlert(data.warning);
           setTimeout(() => {
             setQueueStatus(prev => {
               const next = { ...prev };

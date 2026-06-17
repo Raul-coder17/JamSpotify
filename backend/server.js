@@ -798,7 +798,7 @@ app.post('/api/rooms/:roomId/playback/transfer', roomMiddleware, hostAuthMiddlew
     const response = await fetch('https://api.spotify.com/v1/me/player', {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_ids: [deviceId], play: true })
+      body: JSON.stringify({ device_ids: [deviceId], play: false })
     });
     if (response.ok || response.status === 204) {
       invalidatePlaybackCache(req.room);
@@ -1074,10 +1074,10 @@ app.post('/api/rooms/:roomId/queue', queueLimiter, roomMiddleware, async (req, r
         body: JSON.stringify({ uris: [uri] })
       });
       if (!playResponse.ok && playResponse.status === 404) {
-        room.jamQueue = room.jamQueue.filter(i => i.id !== queueItem.id);
-        return res.status(404).json({
-          error: 'No se detecta reproducción activa. El anfitrión debe abrir Spotify primero.'
-        });
+        // Mantener la canción en cola; el dispositivo no está listo todavía
+        persistRoom(req.roomId);
+        invalidatePlaybackCache(room);
+        return res.json({ success: true, queue: room.jamQueue, warning: 'Canción en cola. Selecciona un reproductor para iniciar la reproducción.' });
       }
     }
 
