@@ -779,8 +779,9 @@ function App() {
             });
           }, 1500);
         } else {
-          setQueueStatus(prev => ({ ...prev, [trackIdKey]: 'error' }));
-          setErrorAlert(data.error || 'Ocurrió un error al agregar la canción.');
+          const isDuplicate = data.error === 'Esta canción ya está en la cola.';
+          setQueueStatus(prev => ({ ...prev, [trackIdKey]: isDuplicate ? 'duplicate' : 'error' }));
+          if (!isDuplicate) setErrorAlert(data.error || 'Ocurrió un error al agregar la canción.');
           setTimeout(() => {
             setQueueStatus(prev => {
               const next = { ...prev };
@@ -1339,17 +1340,18 @@ function App() {
                       <button
                         onClick={() => addToQueue(track)}
                         className="btn-secondary"
-                        disabled={status === 'loading'}
+                        disabled={status === 'loading' || status === 'duplicate'}
                         style={{
                           padding: '0.4rem 0.8rem',
                           fontSize: '0.8rem',
-                          borderColor: status === 'success' ? 'var(--spotify-green)' : 'var(--border-glass)',
-                          color: status === 'success' ? 'var(--spotify-green)' : 'var(--text-primary)'
+                          borderColor: status === 'success' ? 'var(--spotify-green)' : status === 'duplicate' ? 'var(--text-secondary)' : 'var(--border-glass)',
+                          color: status === 'success' ? 'var(--spotify-green)' : status === 'duplicate' ? 'var(--text-secondary)' : 'var(--text-primary)'
                         }}
                       >
                         {status === 'loading' ? 'Agregando...' :
                           status === 'success' ? <><Icons.Check /> Agregada</> :
-                            status === 'error' ? 'Error' : 'Agregar'}
+                          status === 'duplicate' ? 'Ya en cola' :
+                          status === 'error' ? 'Error al agregar' : 'Agregar'}
                       </button>
                     </div>
                   );
