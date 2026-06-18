@@ -220,16 +220,21 @@ function App() {
     if (appMode !== 'guest' || !guestName) return;
 
     const checkApproval = () => {
-      fetch(r(`/guest/status?name=${encodeURIComponent(guestName)}`))
-        .then(res => res.json())
-        .then(data => setGuestApprovalStatus(data.status))
+      fetch(r(`/guest/status?name=${encodeURIComponent(guestName)}`), {
+        headers: guestToken ? { 'X-Guest-Token': guestToken } : {}
+      })
+        .then(res => {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then(data => { if (data?.status) setGuestApprovalStatus(data.status); })
         .catch(err => console.error('Error verificando aprobación:', err));
     };
 
     checkApproval();
     const interval = setInterval(checkApproval, 1000);
     return () => clearInterval(interval);
-  }, [appMode, guestName]);
+  }, [appMode, guestName, guestToken]);
 
   // Polling para obtener las solicitudes pendientes (Solo Host)
   useEffect(() => {
@@ -956,7 +961,7 @@ function App() {
 
   // Control de Acceso: Pantallas de espera y rechazo para invitados
   if (appMode === 'guest' && guestName) {
-    if (guestApprovalStatus === 'pending') {
+    if (guestApprovalStatus === 'pending' || guestApprovalStatus === 'not_requested' || !guestApprovalStatus) {
       return (
         <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
           <div className="glass-panel modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center', padding: '2.5rem 2rem' }}>
