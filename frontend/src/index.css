@@ -23,6 +23,72 @@
   
   --glow-purple: rgba(139, 92, 246, 0.15);
   --glow-blue: rgba(59, 130, 246, 0.15);
+
+  /* ========================================================================
+     TOKENS DE REDISEÑO (Fase 1) — tema OSCURO por defecto.
+     Aditivos: NO reemplazan las variables anteriores (aún en uso por el
+     markup actual). Se consumirán al migrar el markup en las fases 3–6.
+     ======================================================================== */
+  --bg: #0a0a0d;
+  --bg-glow:
+    radial-gradient(1100px 600px at 12% -12%, rgba(124, 92, 255, 0.10), transparent 58%),
+    radial-gradient(1000px 620px at 105% 112%, rgba(29, 185, 84, 0.09), transparent 55%);
+  --surface: #141419;
+  --surface2: #1b1b22;
+  --surface3: #24242d;
+  --border: rgba(255, 255, 255, 0.08);
+  --border2: rgba(255, 255, 255, 0.15);
+  --text: #f4f4f5;
+  --text2: #a1a1aa;
+  --text3: #71717a;
+  --track: rgba(255, 255, 255, 0.1);
+  --shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+
+  /* Acento (igual en ambos temas, salvo --greenText que se ajusta por contraste) */
+  --green: #1db954;
+  --greenText: #25e06a;
+  --onGreen: #04160b;
+  --greenSoft: rgba(29, 185, 84, 0.14);
+  --violet: #8b5cf6;
+}
+
+/* Tema CLARO — se activa con [data-theme="light"] en el contenedor raíz (Fase 2).
+   Mientras ningún elemento tenga data-theme, este bloque no aplica: sin efecto visual. */
+[data-theme="light"] {
+  --bg: #f3f3f0;
+  --bg-glow:
+    radial-gradient(1100px 600px at 12% -12%, rgba(124, 92, 255, 0.12), transparent 58%),
+    radial-gradient(1000px 620px at 105% 112%, rgba(29, 185, 84, 0.12), transparent 55%);
+  --surface: #ffffff;
+  --surface2: #f3f3f4;
+  --surface3: #e9e9ec;
+  --border: rgba(0, 0, 0, 0.08);
+  --border2: rgba(0, 0, 0, 0.16);
+  --text: #18181b;
+  --text2: #55555f;
+  --text3: #9a9aa4;
+  --track: rgba(0, 0, 0, 0.1);
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.1);
+  --greenText: #12813b;
+}
+
+/* Keyframes del rediseño (Fase 1) — definidos pero sin uso hasta las fases siguientes. */
+@keyframes jamspin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes jampulse {
+  0%   { box-shadow: 0 0 0 0 rgba(29, 185, 84, 0.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(29, 185, 84, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(29, 185, 84, 0); }
+}
+@keyframes jameq {
+  0%, 100% { transform: scaleY(0.35); }
+  50%      { transform: scaleY(1); }
+}
+@keyframes jamup {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* Base Styles & Resets */
