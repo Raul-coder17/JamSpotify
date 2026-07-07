@@ -2234,3 +2234,121 @@ p {
 }
 .rd-share-copy:hover { filter: brightness(1.06); }
 .rd-share-copy svg { width: 15px; height: 15px; }
+
+/* ==========================================================================
+   Fase 4.G — Popover de dispositivos, anclado al botón del header (solo host).
+   Backdrop transparente: clic fuera cierra sin listeners nuevos.
+   ========================================================================== */
+.rd-devices-anchor { position: relative; }
+
+.rd-devices-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.rd-devices-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 41;
+  width: 320px;
+  max-width: calc(100vw - 28px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px;
+  animation: jamup 0.2s ease both;
+  text-align: left;
+  cursor: default;
+}
+
+.rd-devices-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 10px;
+}
+.rd-devices-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+.rd-devices-refresh {
+  padding: 6px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease;
+}
+.rd-devices-refresh:hover { border-color: var(--border2); }
+
+.rd-devices-guide {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin: 0 8px 10px;
+}
+.rd-devices-guide strong { color: var(--text); }
+
+.rd-devices-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px;
+  margin-bottom: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.rd-devices-item:hover { background: var(--surface2); }
+.rd-devices-item.active {
+  background: var(--greenSoft);
+  border-color: var(--green);
+}
+
+.rd-devices-item-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.rd-devices-item.webplayer .rd-devices-item-name { color: var(--greenText); }
+.rd-devices-item-type {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 1px;
+}
+
+.rd-devices-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  flex-shrink: 0;
+}
+
+.rd-devices-status {
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text3);
+  line-height: 1.5;
+}

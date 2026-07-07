@@ -4,21 +4,21 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 4 en curso: 4.A–4.F completados. Falta 4.G (popover Dispositivos).
+**Fase 4 completada** (4.A–4.G). Siguen Fase 5 (switch Álbum/Vinilo) y Fase 6 (layout móvil).
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
 1. Fundaciones de estilo (tokens tema + keyframes en index.css) — ✅ hecho
 2. Toggle de tema claro/oscuro — ✅ hecho
 3. Pantallas simples (bienvenida, esperando, rechazado, modal nickname) — ✅ hecho
-4. Dashboard: reestructuración 3 columnas + reinyección de gaps funcionales — en curso
+4. Dashboard: reestructuración 3 columnas + reinyección de gaps funcionales — ✅ hecho
    - 4.A Cascarón estructural (shell 100vh + header + grid 3 col) — ✅ hecho
    - 4.B Columna A: reproductor (carátula álbum, transporte 5 botones, volumen, estado vacío) — ✅ hecho
    - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — ✅ hecho
    - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — ✅ hecho
    - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — ✅ hecho
    - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — ✅ hecho
-   - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — pendiente
+   - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — ✅ hecho
 5. Switch Álbum/Vinilo — pendiente
 6. Layout móvil (tabs + mini-player) — pendiente
 7. Limpieza y cierre — pendiente
@@ -183,3 +183,20 @@ Fase 4 en curso: 4.A–4.F completados. Falta 4.G (popover Dispositivos).
   - **Tema claro:** modal blanco, título oscuro, caja de URL clara.
   - Invitado: sin botón Invitar y modal condicionado a host (condición verificada en código; el header de invitado ya se validó en 4.A).
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 4.G — Popover de Dispositivos (App.jsx + index.css) — cierra la Fase 4
+**Qué cambió:** el panel inline de dispositivos (transitorio en columna A desde 4.A) se convirtió en un popover anclado al botón de dispositivo del header. **Ningún handler ni estado tocado** — mismos `setShowDeviceSelector(!showDeviceSelector)`, `refreshDevices`, `transferDevice` (que ya cerraba el selector y refetcheaba al transferir) y las mismas condiciones de `webPlayerState`/`devices`; solo presentación y anclaje.
+- `App.jsx`: el botón del header se envuelve en `.rd-devices-anchor` (posicionamiento relativo); dentro, condicionado a `showDeviceSelector`: un **backdrop transparente** `fixed inset-0` que cierra al clic fuera (sin listeners nuevos de documento) + el popover `.rd-devices-pop`. Contenido conservado tal cual: cabecera "DISPOSITIVOS" + botón **Refrescar**, texto guía (con la parte extendida cuando `webPlayerState !== 'ready'`), entrada especial del **Web Player** ("Este Navegador (PC Actual)", verde, punto pulsante), estado **connecting** ("Iniciando reproductor…"), estado **vacío** ("No se encontraron otros dispositivos…") y la lista de dispositivos con activo resaltado (fondo `--greenSoft` + borde verde + punto con glow). Se retiró el botón "Cerrar" (redundante: cierran el clic fuera y el propio botón del header; no estaba en la lista de preservación). El bloque inline de la columna A se eliminó.
+- `index.css` (aditivo): bloque `.rd-devices-*` — anchor/backdrop/pop (320px, `top: calc(100%+10px); right:0`, `jamup`, `max-width: calc(100vw - 28px)` para el apilado <1000px), head/label/refresh, guide, item (+`.active`, +`.webplayer`), dot con glow y status. Clases viejas (`.device-select-list`, `.device-item`, `.device-status-dot`) sin uso pero intactas (limpieza en Fase 7).
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub con `/playback/transfer` real que conmuta `is_active`, desktop 1340×864):
+  - **Anclaje:** popover exactamente bajo el botón (top = borde inferior + 10px, alineado a su derecha), panel inline ausente de la columna A.
+  - **Transferir:** clic en "iPhone…" → POST transfer → popover se cierra, el botón del header pasa a mostrar el nuevo dispositivo (via poll) y al reabrir el activo/punto cambió de fila.
+  - **Refrescar:** dispara exactamente 1 fetch a `/playback/devices` y el popover permanece abierto. **Clic fuera** (backdrop) cierra.
+  - **Estado vacío:** interceptando devices→`[]` + Refrescar → "No se encontraron otros dispositivos activos…".
+  - **Estados del Web Player** (inyectando un SDK falso vía `window.onSpotifyWebPlaybackSDKReady`, sin tocar código): `connect()` exitoso → popover muestra "**Iniciando reproductor en el navegador...**" con la guía extendida; al disparar `ready` → aparece la **entrada especial** ("Este Navegador (PC Actual)" en `--greenText`, punto pulsante, subtítulo "JamSpotify Web Player"), desaparece el connecting y la guía se acorta, con los otros 2 dispositivos aún listados.
+  - **Tema claro:** popover blanco, textos oscuros, Web Player con `--greenText` claro (#12813b).
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+**Con esto la Fase 4 queda completa: dashboard en 3 columnas con todos los gaps funcionales preservados (aprobaciones, reset/desconectar, seek, historial completo, 4 estados de Agregar, drag&drop, permisos por rol y selector de dispositivos rico).**

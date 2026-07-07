@@ -1113,13 +1113,81 @@ function App() {
           )}
 
           {appMode === 'host' && (
-            <button
-              onClick={() => setShowDeviceSelector(!showDeviceSelector)}
-              className={`rd-dash-hbtn ${activeDevice ? 'active' : ''}`}
-            >
-              <Icons.Device />
-              <span>{activeDevice ? activeDevice.name : 'Elegir Dispositivo'}</span>
-            </button>
+            <div className="rd-devices-anchor">
+              <button
+                onClick={() => setShowDeviceSelector(!showDeviceSelector)}
+                className={`rd-dash-hbtn ${activeDevice ? 'active' : ''}`}
+              >
+                <Icons.Device />
+                <span>{activeDevice ? activeDevice.name : 'Elegir Dispositivo'}</span>
+              </button>
+
+              {/* Popover de Dispositivos (Solo Host) */}
+              {showDeviceSelector && (
+                <>
+                  <div className="rd-devices-backdrop" onClick={() => setShowDeviceSelector(false)}></div>
+                  <div className="rd-devices-pop">
+                    <div className="rd-devices-head">
+                      <span className="rd-devices-label">Dispositivos</span>
+                      <button onClick={refreshDevices} className="rd-devices-refresh">
+                        Refrescar
+                      </button>
+                    </div>
+                    <p className="rd-devices-guide">
+                      Spotify requiere un reproductor activo.
+                      {webPlayerState !== 'ready' && (
+                        <> <strong>Para reproducir en esta PC:</strong> Abre la aplicación de Spotify en tu ordenador, pon una canción y haz clic en "Refrescar" arriba.</>
+                      )}
+                    </p>
+
+                    {/* Reproductor Web (Navegador Actual) */}
+                    {webPlayerState === 'ready' && webPlayerDeviceId && (
+                      <div
+                        onClick={() => transferDevice(webPlayerDeviceId)}
+                        className={`rd-devices-item webplayer ${activeDevice && activeDevice.id === webPlayerDeviceId ? 'active' : ''}`}
+                      >
+                        <div>
+                          <div className="rd-devices-item-name">
+                            <span className="rd-dash-dot-online"></span>
+                            Este Navegador (PC Actual)
+                          </div>
+                          <div className="rd-devices-item-type">JamSpotify Web Player</div>
+                        </div>
+                        {activeDevice && activeDevice.id === webPlayerDeviceId && <span className="rd-devices-dot"></span>}
+                      </div>
+                    )}
+
+                    {webPlayerState === 'connecting' && (
+                      <div className="rd-devices-status">
+                        Iniciando reproductor en el navegador...
+                      </div>
+                    )}
+
+                    {devices.filter(d => d.id !== webPlayerDeviceId).length === 0 && webPlayerState !== 'ready' ? (
+                      <div className="rd-devices-status">
+                        No se encontraron otros dispositivos activos. Haz clic en Refrescar.
+                      </div>
+                    ) : (
+                      devices
+                        .filter(device => device.id !== webPlayerDeviceId)
+                        .map(device => (
+                          <div
+                            key={device.id}
+                            onClick={() => transferDevice(device.id)}
+                            className={`rd-devices-item ${device.is_active ? 'active' : ''}`}
+                          >
+                            <div>
+                              <div className="rd-devices-item-name">{device.name}</div>
+                              <div className="rd-devices-item-type">{device.type}</div>
+                            </div>
+                            {device.is_active && <span className="rd-devices-dot"></span>}
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           <button
@@ -1181,78 +1249,6 @@ function App() {
 
         {/* COLUMNA A: Reproductor */}
         <section className="rd-dash-col">
-
-        {/* Selector de Dispositivos (Solo Host) — transitorio en columna A hasta 4.G (popover) */}
-        {showDeviceSelector && appMode === 'host' && (
-        <div className="glass-panel" style={{ animation: 'fadeInUp 0.3s ease' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Dispositivos Disponibles</h3>
-            <button onClick={refreshDevices} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
-              Refrescar
-            </button>
-          </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Spotify requiere un reproductor activo.
-            {webPlayerState !== 'ready' && (
-              <> <strong>Para reproducir en esta PC:</strong> Abre la aplicación de Spotify en tu ordenador, pon una canción y haz clic en "Refrescar" arriba.</>
-            )}
-          </p>
-          <div className="device-select-list">
-            {/* Reproductor Web (Navegador Actual) */}
-            {webPlayerState === 'ready' && webPlayerDeviceId && (
-              <div
-                onClick={() => transferDevice(webPlayerDeviceId)}
-                className={`device-item ${activeDevice && activeDevice.id === webPlayerDeviceId ? 'active' : ''}`}
-                style={{
-                  border: '1px solid var(--spotify-green)',
-                  background: 'rgba(29, 185, 84, 0.05)',
-                  marginBottom: '0.75rem'
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--spotify-green)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span className="online-dot" style={{ position: 'relative', width: '6px', height: '6px' }}></span>
-                    Este Navegador (PC Actual)
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>JamSpotify Web Player</div>
-                </div>
-                <div className="device-status-dot"></div>
-              </div>
-            )}
-
-            {webPlayerState === 'connecting' && (
-              <div style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Iniciando reproductor en el navegador...
-              </div>
-            )}
-
-            {devices.filter(d => d.id !== webPlayerDeviceId).length === 0 && webPlayerState !== 'ready' ? (
-              <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No se encontraron otros dispositivos activos. Haz clic en Refrescar.
-              </div>
-            ) : (
-              devices
-                .filter(device => device.id !== webPlayerDeviceId)
-                .map(device => (
-                  <div
-                    key={device.id}
-                    onClick={() => transferDevice(device.id)}
-                    className={`device-item ${device.is_active ? 'active' : ''}`}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{device.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{device.type}</div>
-                    </div>
-                    <div className="device-status-dot"></div>
-                  </div>
-                ))
-            )}
-          </div>
-          <button onClick={() => setShowDeviceSelector(false)} className="btn-secondary" style={{ width: '100%', marginTop: '0.75rem' }}>
-            Cerrar
-          </button>
-        </div>
-        )}
 
           {/* Card Reproductor Actual */}
           <div className="rd-player">
