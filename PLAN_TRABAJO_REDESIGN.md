@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 4 en curso: 4.A–4.E completados. Siguen 4.F (modal Compartir) y 4.G (popover Dispositivos).
+Fase 4 en curso: 4.A–4.F completados. Falta 4.G (popover Dispositivos).
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -17,7 +17,7 @@ Fase 4 en curso: 4.A–4.E completados. Siguen 4.F (modal Compartir) y 4.G (popo
    - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — ✅ hecho
    - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — ✅ hecho
    - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — ✅ hecho
-   - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — pendiente
+   - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — ✅ hecho
    - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — pendiente
 5. Switch Álbum/Vinilo — pendiente
 6. Layout móvil (tabs + mini-player) — pendiente
@@ -168,4 +168,18 @@ Fase 4 en curso: 4.A–4.E completados. Siguen 4.F (modal Compartir) y 4.G (popo
   - **Estructura:** tarjeta encima de la tarjeta de cola, `flex-shrink:0`, borde violeta al 35%, título/punto en `--violet`, filas con Aceptar (fondo `--green`, texto `--onGreen`) y Rechazar (transparente, texto/borde rojos).
   - **Funcional:** el panel **aparece por el poll** al cargar (0→2); **Aceptar** a Sofía → fila fuera y contador (2)→(1); **Rechazar** a Andrés → panel **desaparece por completo** al quedar `pendingApprovals` vacío; tras reiniciar el stub, el panel **reaparece sin recargar** vía poll (→(2)).
   - **Tema claro:** tarjeta blanca, filas `--surface2` claras, nombre oscuro, título violeta.
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 4.F — Modal Compartir (App.jsx + index.css)
+**Qué cambió:** el panel fijo de compartir de la columna C (fallback transitorio de 4.A) se convirtió en modal. `copyLink`, `copied` y `serverInfo.joinUrl` **intactos**; único añadido de estado (autorizado): `showShare` (`useState(false)`).
+- `App.jsx`: (1) estado `showShare`; (2) el botón verde **Invitar** del header pasa de `scrollIntoView` al panel a `setShowShare(true)`; (3) eliminado el bloque `{/* Información de Compartir */}` de la columna C (la columna queda: aprobaciones + cola/historial, y la cola gana el espacio); (4) nuevo modal (junto al de nickname) condicionado a `showShare && appMode === 'host'`: overlay `.rd-modal-overlay` (reutilizado de Fase 3) que **cierra al clicar fuera** (`stopPropagation` en la tarjeta), cabecera con título y botón ✕, texto, QR (misma URL de qrserver con `serverInfo.joinUrl` + fallback "Cargando información de red..."), y fila con la **URL oculta** ("Enlace de Invitación (Oculto por seguridad)" — decisión confirmada) + botón Copiar con feedback "¡Copiado!". Sin manejo de Escape (no existía antes; no se añade lógica nueva).
+- `index.css` (aditivo): bloque `.rd-share-*` — `.rd-share-modal` (400px, `--surface`, radius 22, `jamup`), `.rd-share-head/title/close`, `.rd-share-text`, `.rd-share-qr` (blanco, 180px, padding 12, radius 16) + `.rd-share-qr-label`/`.rd-share-loading`, `.rd-share-row/url` (caja `--surface2` en cursiva `--text3`) y `.rd-share-copy` (verde, `--onGreen`). Clases viejas (`.share-section`, `.share-link-copy`, `.qr-code-img`, etc.) sin uso pero intactas (limpieza en Fase 7).
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub, desktop 1340×864):
+  - El panel viejo ya no existe (`#rd-share-panel` ausente; columna C con 2 tarjetas). El botón **Invitar abre el modal**: overlay con `blur(6px)`, QR cargado (`naturalWidth > 0`), caja de enlace con el texto oculto y **ningún** `http`/`localhost` visible en el modal.
+  - **Cierres:** botón ✕ y clic fuera del modal — ambos cierran; clic dentro no.
+  - **Copiar:** con el clipboard real del preview headless falla por foco ("Document is not focused" — limitación del entorno, no del código); stubbeando `writeText` se verificó la ruta completa: botón → "**¡Copiado!**" con check → revierte a "Copiar" a los 2s, y el argumento escrito fue el `joinUrl` real (`?roomId=…&mode=guest`) aunque el modal no lo muestre.
+  - **Tema claro:** modal blanco, título oscuro, caja de URL clara.
+  - Invitado: sin botón Invitar y modal condicionado a host (condición verificada en código; el header de invitado ya se validó en 4.A).
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.

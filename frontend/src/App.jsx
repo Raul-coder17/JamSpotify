@@ -144,6 +144,7 @@ function App() {
   // UI Feedback
   const [copied, setCopied] = useState(false);
   const [errorAlert, setErrorAlert] = useState(null);
+  const [showShare, setShowShare] = useState(false); // Modal Compartir (Fase 4.F)
 
   // Tema claro/oscuro (Fase 2) — persistido en localStorage, default oscuro
   const [theme, setTheme] = useState(() => localStorage.getItem('jamspotify-theme') || 'dark');
@@ -1140,9 +1141,8 @@ function App() {
                 Desconectar
               </button>
 
-              {/* Transitorio: hasta el sub-ítem 4.F desplaza la vista al panel de compartir */}
               <button
-                onClick={() => document.getElementById('rd-share-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+                onClick={() => setShowShare(true)}
                 className="rd-dash-invite"
                 title="Ver información para invitar"
               >
@@ -1473,55 +1473,6 @@ function App() {
             </div>
           )}
 
-          {/* Información de Compartir (Solo Host) */}
-          {appMode === 'host' && (
-            <div id="rd-share-panel" className="glass-panel" style={{ border: '1px solid rgba(29, 185, 84, 0.15)' }}>
-              <h2 style={{ fontSize: '1.3rem', marginBottom: '0.5rem', color: 'var(--spotify-green)' }}>
-                ¡Invita a la gente!
-              </h2>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Cualquiera en tu red Wi-Fi puede escanear el código y agregar canciones a la cola en tiempo real.
-              </p>
-
-              <div className="share-section">
-                {serverInfo.joinUrl ? (
-                  <>
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(serverInfo.joinUrl)}`}
-                      alt="Código QR de JamSpotify"
-                      className="qr-code-img"
-                    />
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--spotify-green)', marginBottom: '0.5rem' }}>
-                      Escanea para Unirte
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ padding: '2rem 0', color: 'var(--text-muted)' }}>
-                    Cargando información de red...
-                  </div>
-                )}
-
-                <div className="share-link-copy">
-                  <input
-                    type="text"
-                    readOnly
-                    value="Enlace de Invitación (Oculto por seguridad)"
-                    className="share-link-input"
-                    style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}
-                  />
-                  <button
-                    onClick={copyLink}
-                    className="btn-secondary"
-                    style={{ padding: '0.5rem 0.75rem', display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}
-                    title="Copiar enlace"
-                  >
-                    {copied ? <><Icons.Check /> Copiado</> : <><Icons.Copy /> Copiar Enlace</>}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Cola de Reproducción Compartida e Historial (Pestañas) */}
           <div className="rd-qh">
             <div className="rd-qh-tabs">
@@ -1634,6 +1585,43 @@ function App() {
         </section>
 
       </main>
+
+      {/* Modal Compartir (Solo Host) */}
+      {showShare && appMode === 'host' && (
+        <div className="rd-modal-overlay" onClick={() => setShowShare(false)}>
+          <div className="rd-share-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="rd-share-head">
+              <h2 className="rd-share-title">¡Invita a la gente!</h2>
+              <button onClick={() => setShowShare(false)} className="rd-share-close" title="Cerrar" aria-label="Cerrar">
+                ✕
+              </button>
+            </div>
+            <p className="rd-share-text">
+              Cualquiera en tu red Wi-Fi puede escanear el código y agregar canciones a la cola en tiempo real.
+            </p>
+
+            {serverInfo.joinUrl ? (
+              <div className="rd-share-qr-wrap">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(serverInfo.joinUrl)}`}
+                  alt="Código QR de JamSpotify"
+                  className="rd-share-qr"
+                />
+                <span className="rd-share-qr-label">Escanea para Unirte</span>
+              </div>
+            ) : (
+              <div className="rd-share-loading">Cargando información de red...</div>
+            )}
+
+            <div className="rd-share-row">
+              <div className="rd-share-url">Enlace de Invitación (Oculto por seguridad)</div>
+              <button onClick={copyLink} className="rd-share-copy" title="Copiar enlace">
+                {copied ? <><Icons.Check /> ¡Copiado!</> : <><Icons.Copy /> Copiar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal para configurar Nickname */}
       {showNickModal && (

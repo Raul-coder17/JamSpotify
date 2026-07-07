@@ -2114,3 +2114,123 @@ p {
   background: rgba(239, 68, 68, 0.12);
   border-color: rgba(239, 68, 68, 0.7);
 }
+
+/* ==========================================================================
+   Fase 4.F — Modal Compartir (solo host). Overlay: reutiliza .rd-modal-overlay.
+   ========================================================================== */
+.rd-share-modal {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  padding: 26px;
+  animation: jamup 0.28s ease both;
+}
+
+.rd-share-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.rd-share-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0;
+}
+.rd-share-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border: none;
+  border-radius: 9px;
+  color: var(--text2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+.rd-share-close:hover { color: var(--text); }
+
+.rd-share-text {
+  color: var(--text2);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0 0 18px;
+}
+
+.rd-share-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.rd-share-qr {
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  padding: 12px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  display: block;
+}
+.rd-share-qr-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--greenText);
+}
+.rd-share-loading {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--text3);
+  font-size: 13.5px;
+}
+
+.rd-share-row {
+  display: flex;
+  gap: 8px;
+}
+.rd-share-url {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 11px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rd-share-copy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 16px;
+  background: var(--green);
+  border: none;
+  border-radius: 12px;
+  color: var(--onGreen);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: filter 0.15s ease;
+}
+.rd-share-copy:hover { filter: brightness(1.06); }
+.rd-share-copy svg { width: 15px; height: 15px; }
