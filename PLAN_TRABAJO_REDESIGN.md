@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 4 en curso: 4.A–4.D completados (cascarón, reproductor, buscador, cola/historial). Siguen 4.E–4.G.
+Fase 4 en curso: 4.A–4.E completados. Siguen 4.F (modal Compartir) y 4.G (popover Dispositivos).
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -16,7 +16,7 @@ Fase 4 en curso: 4.A–4.D completados (cascarón, reproductor, buscador, cola/h
    - 4.B Columna A: reproductor (carátula álbum, transporte 5 botones, volumen, estado vacío) — ✅ hecho
    - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — ✅ hecho
    - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — ✅ hecho
-   - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — pendiente
+   - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — ✅ hecho
    - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — pendiente
    - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — pendiente
 5. Switch Álbum/Vinilo — pendiente
@@ -156,4 +156,16 @@ Fase 4 en curso: 4.A–4.D completados (cascarón, reproductor, buscador, cola/h
   - **Estados vacíos:** "La cola está vacía…" y "Aún no se han reproducido canciones…" con contadores "· 0".
   - **Invitado (Pepe):** ninguna fila `draggable`; botón Quitar **solo** en su propia canción (agregó "Flowers" → apareció solo ahí, y pudo borrarla); historial con **una sola** acción (re-agregar).
   - **Tema claro:** tarjeta blanca, tab activa verde, chip con `--greenText` claro (#12813b), textos oscuros.
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 4.E — Columna C: tarjeta de aprobaciones (App.jsx + index.css)
+**Qué cambió:** restilizado del panel de solicitudes de acceso. **Ningún handler, estado, prop ni useEffect tocado** — mismo `handleApproveGuest(name, 'approve'|'reject')`, misma condición `appMode === 'host' && pendingApprovals.length > 0` y el mismo poll de `/guest/pending`; solo JSX de presentación y clases.
+- `index.css` (aditivo): bloque `.rd-approvals-*` — `.rd-approvals` (tarjeta `--surface`, `flex-shrink:0`, encima de la cola en col C, borde violeta `color-mix(in srgb, var(--violet) 35%, transparent)`, entrada `jamup`), `.rd-approvals-title` (Outfit, color `--violet`) con `.rd-approvals-dot` (punto violeta con glow), `.rd-approvals-sub`, `.rd-approvals-list/row` (filas `--surface2`), `.rd-approvals-name` (con ellipsis), `.rd-approvals-accept` (verde sólido, pill, `--onGreen`) y `.rd-approvals-reject` (outline rojo, hover con fondo rojo suave).
+- `App.jsx`: solo el bloque `{/* Solicitudes de Acceso */}` — clases en lugar de los estilos inline y colores hardcodeados (#c084fc/#a855f7) que usaba antes.
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub con 2 invitados pendientes, desktop 1340×864):
+  - **Estructura:** tarjeta encima de la tarjeta de cola, `flex-shrink:0`, borde violeta al 35%, título/punto en `--violet`, filas con Aceptar (fondo `--green`, texto `--onGreen`) y Rechazar (transparente, texto/borde rojos).
+  - **Funcional:** el panel **aparece por el poll** al cargar (0→2); **Aceptar** a Sofía → fila fuera y contador (2)→(1); **Rechazar** a Andrés → panel **desaparece por completo** al quedar `pendingApprovals` vacío; tras reiniciar el stub, el panel **reaparece sin recargar** vía poll (→(2)).
+  - **Tema claro:** tarjeta blanca, filas `--surface2` claras, nombre oscuro, título violeta.
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.

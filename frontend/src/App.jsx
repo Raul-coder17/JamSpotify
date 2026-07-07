@@ -1441,30 +1441,28 @@ function App() {
 
           {/* Solicitudes de Acceso (Solo Host) */}
           {appMode === 'host' && pendingApprovals.length > 0 && (
-            <div className="glass-panel" style={{ border: '1px solid rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.05)', animation: 'fadeInUp 0.3s ease' }}>
-              <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span className="online-dot" style={{ backgroundColor: '#a855f7', boxShadow: '0 0 8px #a855f7' }}></span>
+            <div className="rd-approvals">
+              <h2 className="rd-approvals-title">
+                <span className="rd-approvals-dot"></span>
                 Solicitudes de Acceso ({pendingApprovals.length})
               </h2>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              <p className="rd-approvals-sub">
                 Nuevos invitados quieren unirse a tu sala de JamSpotify.
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div className="rd-approvals-list">
                 {pendingApprovals.map(req => (
-                  <div key={req.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '0.5rem', border: '1px solid var(--border-glass)' }}>
-                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff' }}>{req.name}</span>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div key={req.name} className="rd-approvals-row">
+                    <span className="rd-approvals-name">{req.name}</span>
+                    <div className="rd-approvals-actions">
                       <button
                         onClick={() => handleApproveGuest(req.name, 'approve')}
-                        className="btn-primary"
-                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: '0.5rem' }}
+                        className="rd-approvals-accept"
                       >
                         Aceptar
                       </button>
                       <button
                         onClick={() => handleApproveGuest(req.name, 'reject')}
-                        className="btn-secondary"
-                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: '0.5rem', borderColor: '#ef4444', color: '#ef4444' }}
+                        className="rd-approvals-reject"
                       >
                         Rechazar
                       </button>
