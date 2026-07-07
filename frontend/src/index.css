@@ -1245,3 +1245,188 @@ p {
   color: var(--text3);
   font-weight: 600;
 }
+
+/* ==========================================================================
+   Fase 4.A — Cascarón del dashboard: shell 100vh + header + grid 3 columnas.
+   Los paneles internos (.glass-panel, etc.) se restilizan en 4.B–4.G.
+   ========================================================================== */
+.rd-dash-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--bg);
+  background-image: var(--bg-glow);
+  background-attachment: fixed;
+  color: var(--text);
+}
+
+.rd-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 22px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rd-dash-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.rd-dash-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.rd-dash-brand svg { color: var(--green); flex-shrink: 0; }
+
+.rd-dash-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--text2);
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 0;
+}
+.rd-dash-pill > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+
+.rd-dash-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--violet);
+  flex-shrink: 0;
+}
+.rd-dash-dot-online {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: jampulse 2s infinite;
+  flex-shrink: 0;
+}
+
+.rd-dash-header-right {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+
+.rd-dash-hbtn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.rd-dash-hbtn:hover { border-color: var(--border2); }
+.rd-dash-hbtn > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.rd-dash-hbtn.active { border-color: var(--green); color: var(--greenText); }
+
+.rd-dash-hbtn-icon {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  color: var(--text2);
+}
+.rd-dash-hbtn-icon:hover { color: var(--text); }
+
+.rd-dash-hbtn-danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.25); }
+.rd-dash-hbtn-danger:hover { border-color: rgba(239, 68, 68, 0.55); }
+
+.rd-dash-invite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: var(--green);
+  border: none;
+  border-radius: 11px;
+  color: var(--onGreen);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px var(--greenSoft);
+}
+.rd-dash-invite:hover { filter: brightness(1.06); }
+
+.rd-dash-alert {
+  margin: 12px 22px 0;
+  flex-shrink: 0;
+}
+
+.rd-dash-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 336px;
+  gap: 18px;
+  padding: 18px 22px 22px;
+}
+
+.rd-dash-col {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Fallback responsive temporal (hasta Fase 6): apilar columnas con scroll de página. */
+@media (max-width: 999px) {
+  .rd-dash-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+  .rd-dash-header { flex-wrap: wrap; }
+  .rd-dash-header-right { flex-wrap: wrap; }
+  .rd-dash-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px;
+  }
+  .rd-dash-col {
+    overflow: visible;
+    min-height: auto;
+  }
+}

@@ -4,14 +4,21 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 3 completada (pantallas simples). Fase 4 pendiente.
+Fase 4 en curso: sub-ítem 4.A (cascarón 3 columnas) completado. Siguen 4.B–4.G.
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
 1. Fundaciones de estilo (tokens tema + keyframes en index.css) — ✅ hecho
 2. Toggle de tema claro/oscuro — ✅ hecho
 3. Pantallas simples (bienvenida, esperando, rechazado, modal nickname) — ✅ hecho
-4. Dashboard: reestructuración 3 columnas + reinyección de gaps funcionales — pendiente
+4. Dashboard: reestructuración 3 columnas + reinyección de gaps funcionales — en curso
+   - 4.A Cascarón estructural (shell 100vh + header + grid 3 col) — ✅ hecho
+   - 4.B Columna A: reproductor (carátula álbum, transporte 5 botones, volumen, estado vacío) — pendiente
+   - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — pendiente
+   - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — pendiente
+   - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — pendiente
+   - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — pendiente
+   - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — pendiente
 5. Switch Álbum/Vinilo — pendiente
 6. Layout móvil (tabs + mini-player) — pendiente
 7. Limpieza y cierre — pendiente
@@ -87,3 +94,25 @@ Fase 3 completada (pantallas simples). Fase 4 pendiente.
 **Arreglo:** añadido `headers: { 'X-Host-Token': hostToken }` a los fetch de `/guest/pending` (+ `hostToken` en las deps del efecto de polling) y `/auth/logout`. Auditados los 14 endpoints host-auth: el resto ya lo enviaba.
 **Archivos:** `frontend/src/App.jsx`.
 **Validado:** build OK, 0 lint nuevos. Confirmación end-to-end (aparición del invitado pendiente) pendiente de re-prueba del usuario con una sala real.
+
+### Fase 4 — Decisiones de diseño confirmadas (Raúl)
+1. Restablecer/Desconectar: botones compactos en el header (no menú "⋯").
+2. URL de invitación: se mantiene **oculta** (no adoptar el texto plano del mockup).
+3. En Fase 4 la carátula es estilo álbum (cuadrada); el switch álbum/vinilo llega en Fase 5.
+4. Responsive <1000px hasta Fase 6: apilar las 3 columnas con scroll de página.
+5. `errorAlert`: banner bajo el header, sin lógica nueva.
+6. Gaps adicionales también intocables: drag&drop de la cola, eliminar del historial, permisos de borrado por rol (host todo / invitado solo lo suyo), selector de dispositivos rico (Refrescar, Web Player, estados connecting/vacío).
+
+### Fase 4.A — Cascarón del dashboard (App.jsx + index.css)
+**Qué cambió:** solo estructura/presentación del dashboard. **Ningún handler, estado, prop ni efecto tocado.**
+- `index.css` (aditivo): bloque `.rd-dash-*` — `.rd-dash-shell` (100vh, flex column, `overflow:hidden`, fondo `--bg`/`--bg-glow`), `.rd-dash-header` (borde inferior, clústeres izq/der), `.rd-dash-brand`, `.rd-dash-pill` (+ `.rd-dash-dot` violeta / `.rd-dash-dot-online` verde con `jampulse`), `.rd-dash-hbtn` (+ variantes `-icon`, `-danger`, `.active`), `.rd-dash-invite` (verde), `.rd-dash-alert`, `.rd-dash-grid` (grid `300px / minmax(0,1fr) / 336px`, `min-height:0`), `.rd-dash-col` (scroll interno `overflow-y:auto`). Media query `<1000px`: shell con altura auto, grid en columna apilada con scroll de página (fallback temporal hasta Fase 6). Las clases viejas (`.app-container`, `.header`, `.dashboard-grid`) quedan sin uso pero intactas (limpieza en Fase 7).
+- `App.jsx`: el `return` del dashboard pasa de `.app-container`/`.header`/`.dashboard-grid` (2 col) al shell nuevo (3 col). Header: marca clicable (mismo `setAppMode('choose')`), pill "Sala de {host}" (invitado), pill "N en línea" (mismas condiciones y tooltip), botón dispositivo (mismo toggle), toggle tema, Restablecer Sala (`-danger`) y Desconectar (host), botón verde **Invitar** (host; transitorio: hace scroll al panel de compartir vía `id="rd-share-panel"` hasta que 4.F lo convierta en modal), tag "Invitado: X" + Editar (invitado). Columnas: A = selector de dispositivos (transitorio aquí hasta 4.G, antes vivía entre header y grid) + reproductor; B = buscador; C = aprobaciones + compartir + cola/historial. Los paneles internos conservan sus clases `.glass-panel` viejas (se restilizan en 4.B–4.G).
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + **backend stub** en :3000 que simula los endpoints de sala; scratchpad, fuera del repo):
+  - **Desktop (1340×864):** shell = 100vh exacto, sin scroll de página; grid `300/624/336`; columna C con scroll interno (contenido 1163px en viewport de 757px). Header host completo (pill online, dispositivo, tema, reset, desconectar, Invitar).
+  - **Funcional (host):** búsqueda con debounce → resultados; Agregar → "Agregada" (success) y "Ya en cola" (duplicate, deshabilitado); contador de cola actualizado por polling (3→4); pestaña Historial con las 3 acciones (Reproducir ahora → cambió la canción del reproductor, Eliminar del historial, re-agregar); Aceptar solicitud → panel 2→1; seek +15s (0:12→0:27) y clic al 50% de la barra (→1:47 de 3:34); toggle tema → tokens light en el shell + persistencia.
+  - **Invitado** (`mode=guest` aprobado por stub): pill "Sala de …", tag + Editar; sin transporte/volumen/seek/reset/Invitar/panel compartir; 0 botones de borrado en canciones ajenas.
+  - **<1000px (817px):** columnas apiladas a ancho completo con scroll de página.
+  - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.

@@ -1086,57 +1086,68 @@ function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className="rd-dash-shell">
       {/* Header */}
-      <header className="header">
-        <div className="logo" onClick={() => setAppMode('choose')} style={{ cursor: 'pointer' }}>
-          <Icons.Spotify />
-          <span>JamSpotify</span>
-          {appMode === 'guest' && <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>(Sesión de {serverInfo.hostName || 'Anfitrión'})</span>}
+      <header className="rd-dash-header">
+        <div className="rd-dash-header-left">
+          <div className="rd-dash-brand" onClick={() => setAppMode('choose')}>
+            <Icons.Spotify />
+            <span>JamSpotify</span>
+          </div>
+          {appMode === 'guest' && (
+            <div className="rd-dash-pill" title={`Sesión de ${serverInfo.hostName || 'Anfitrión'}`}>
+              <span className="rd-dash-dot"></span>
+              <span>Sala de {serverInfo.hostName || 'Anfitrión'}</span>
+            </div>
+          )}
         </div>
 
-        {/* Usuarios activos en la sala */}
-        {(appMode === 'host' || appMode === 'guest') && connectedUsers.length > 0 && (
-          <div className="users-online-indicator" title={`Conectados: ${connectedUsers.join(', ')}`}>
-            <span className="online-dot"></span>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-              {connectedUsers.length} en línea
-            </span>
-          </div>
-        )}
+        <div className="rd-dash-header-right">
+          {/* Usuarios activos en la sala */}
+          {(appMode === 'host' || appMode === 'guest') && connectedUsers.length > 0 && (
+            <div className="rd-dash-pill" title={`Conectados: ${connectedUsers.join(', ')}`}>
+              <span className="rd-dash-dot-online"></span>
+              <span>{connectedUsers.length} en línea</span>
+            </div>
+          )}
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {appMode === 'host' && (
+            <button
+              onClick={() => setShowDeviceSelector(!showDeviceSelector)}
+              className={`rd-dash-hbtn ${activeDevice ? 'active' : ''}`}
+            >
+              <Icons.Device />
+              <span>{activeDevice ? activeDevice.name : 'Elegir Dispositivo'}</span>
+            </button>
+          )}
+
           <button
             onClick={toggleTheme}
-            className="btn-secondary"
+            className="rd-dash-hbtn rd-dash-hbtn-icon"
             title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
             aria-label="Cambiar tema"
-            style={{ padding: '0.5rem', width: '38px', height: '38px' }}
           >
             {theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}
           </button>
 
           {appMode === 'host' && (
             <>
-              <button
-                onClick={() => setShowDeviceSelector(!showDeviceSelector)}
-                className={`btn-secondary ${activeDevice ? 'active' : ''}`}
-                style={{ padding: '0.5rem 0.75rem', gap: '0.4rem', fontSize: '0.85rem' }}
-              >
-                <Icons.Device />
-                {activeDevice ? activeDevice.name : 'Elegir Dispositivo'}
-              </button>
-
-              <button
-                onClick={handleResetJam}
-                className="btn-secondary"
-                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#ff4d4d', borderColor: 'rgba(255, 77, 77, 0.2)' }}
-              >
+              <button onClick={handleResetJam} className="rd-dash-hbtn rd-dash-hbtn-danger">
                 Restablecer Sala
               </button>
 
-              <button onClick={handleLogout} className="btn-secondary" style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+              <button onClick={handleLogout} className="rd-dash-hbtn">
                 Desconectar
+              </button>
+
+              {/* Transitorio: hasta el sub-ítem 4.F desplaza la vista al panel de compartir */}
+              <button
+                onClick={() => document.getElementById('rd-share-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+                className="rd-dash-invite"
+                title="Ver información para invitar"
+              >
+                <Icons.Share />
+                Invitar
               </button>
             </>
           )}
@@ -1149,8 +1160,7 @@ function App() {
                   setNickInput(guestName);
                   setShowNickModal(true);
                 }}
-                className="btn-secondary"
-                style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+                className="rd-dash-hbtn"
               >
                 Editar
               </button>
@@ -1161,14 +1171,20 @@ function App() {
 
       {/* Alertas */}
       {errorAlert && (
-        <div className="alert-card alert-warning">
+        <div className="alert-card alert-warning rd-dash-alert">
           <span style={{ fontWeight: 'bold' }}>Nota:</span> {errorAlert}
         </div>
       )}
 
-      {/* Selector de Dispositivos (Solo Host) */}
-      {showDeviceSelector && appMode === 'host' && (
-        <div className="glass-panel" style={{ marginBottom: '1.5rem', animation: 'fadeInUp 0.3s ease' }}>
+      {/* Dashboard Principal */}
+      <main className="rd-dash-grid">
+
+        {/* COLUMNA A: Reproductor */}
+        <section className="rd-dash-col">
+
+        {/* Selector de Dispositivos (Solo Host) — transitorio en columna A hasta 4.G (popover) */}
+        {showDeviceSelector && appMode === 'host' && (
+        <div className="glass-panel" style={{ animation: 'fadeInUp 0.3s ease' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Dispositivos Disponibles</h3>
             <button onClick={refreshDevices} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
@@ -1236,13 +1252,7 @@ function App() {
             Cerrar
           </button>
         </div>
-      )}
-
-      {/* Dashboard Principal */}
-      <main className="dashboard-grid">
-
-        {/* LADO IZQUIERDO: Reproductor y Buscador */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
+        )}
 
           {/* Card Reproductor Actual */}
           <div className="glass-panel player-card">
@@ -1367,6 +1377,11 @@ function App() {
             )}
           </div>
 
+        </section>
+
+        {/* COLUMNA B: Buscador */}
+        <section className="rd-dash-col">
+
           {/* Panel de Búsqueda (Para invitados y host también) */}
           <div className="glass-panel">
             <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1433,8 +1448,8 @@ function App() {
 
         </section>
 
-        {/* LADO DERECHO: Cola compartida e Información de Compartir */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
+        {/* COLUMNA C: Aprobaciones, Compartir y Cola/Historial */}
+        <section className="rd-dash-col">
 
           {/* Solicitudes de Acceso (Solo Host) */}
           {appMode === 'host' && pendingApprovals.length > 0 && (
@@ -1474,7 +1489,7 @@ function App() {
 
           {/* Información de Compartir (Solo Host) */}
           {appMode === 'host' && (
-            <div className="glass-panel" style={{ border: '1px solid rgba(29, 185, 84, 0.15)' }}>
+            <div id="rd-share-panel" className="glass-panel" style={{ border: '1px solid rgba(29, 185, 84, 0.15)' }}>
               <h2 style={{ fontSize: '1.3rem', marginBottom: '0.5rem', color: 'var(--spotify-green)' }}>
                 ¡Invita a la gente!
               </h2>
