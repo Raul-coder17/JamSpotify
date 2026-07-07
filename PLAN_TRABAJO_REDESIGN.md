@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 4 en curso: 4.A (cascarón), 4.B (reproductor) y 4.C (buscador) completados. Siguen 4.D–4.G.
+Fase 4 en curso: 4.A–4.D completados (cascarón, reproductor, buscador, cola/historial). Siguen 4.E–4.G.
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -15,7 +15,7 @@ Fase 4 en curso: 4.A (cascarón), 4.B (reproductor) y 4.C (buscador) completados
    - 4.A Cascarón estructural (shell 100vh + header + grid 3 col) — ✅ hecho
    - 4.B Columna A: reproductor (carátula álbum, transporte 5 botones, volumen, estado vacío) — ✅ hecho
    - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — ✅ hecho
-   - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — pendiente
+   - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — ✅ hecho
    - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — pendiente
    - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — pendiente
    - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — pendiente
@@ -142,4 +142,18 @@ Fase 4 en curso: 4.A (cascarón), 4.B (reproductor) y 4.C (buscador) completados
   - **Debounce/estados de búsqueda:** al teclear aparece "Buscando en Spotify..." (capturado a los 100ms) y luego los resultados; query sin matches → "No se encontraron resultados para «zzzznoexiste»".
   - **4 estados del botón:** default (pill "+ Agregar") → **loading** ("Agregando…" deshabilitado; capturado retrasando el POST /queue 800ms) → **success** (chip verde "✓ Agregada"); **duplicate** con canción ya en cola (chip atenuado "Ya en cola", deshabilitado); **error** con 500 simulado del stub (pill roja "Error al agregar", clicable, y el banner `errorAlert` apareció bajo el header).
   - **Tema claro:** tarjeta blanca, input `--surface2` claro, textos oscuros.
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 4.D — Columna C: cola + historial (App.jsx + index.css)
+**Qué cambió:** restilizado de la tarjeta de cola/historial. **Ningún handler, estado, prop, drag&drop ni useEffect tocado** — mismos `setSidebarTab`, `handleDragStart/Over/End`, `removeFromQueue`, `playTrackImmediately`, `removeFromHistory`, `addToQueue`, `queueStatus`, `formatPlayedAt` y las mismas condiciones de rol; solo JSX de presentación y clases.
+- `index.css` (aditivo): bloque `.rd-qh-*` — `.rd-qh` (tarjeta `--surface`, `flex:1 1 auto`, `min-height:280px` transitorio mientras aprobaciones+compartir sigan en la columna hasta 4.E/4.F), `.rd-qh-tabs`/`.rd-qh-tab` (pestañas subrayadas: borde inferior 2px verde en activa, Outfit 14.5px), `.rd-qh-list` (scroll interno), `.rd-qh-row` (hover `--surface2`, `jamup`, `.dragging` al 40%), `.rd-qh-index`, `.rd-qh-art` (42px, `.faded` para historial), `.rd-qh-chip` (chip verde `addedBy`), `.rd-qh-artist`, `.rd-qh-action` (botón icono 32px: hover verde; `.danger` hover rojo para quitar/borrar; `.success` verde persistente para re-agregado; `:disabled` opaco), `.rd-qh-empty`. Media query <1000px: `max-height:70vh`. Clases viejas (`.tabs-container`, `.tab-btn`, `.btn-delete-item`, `.track-*`, `.added-by-tag`) sin uso en el dashboard pero intactas (limpieza en Fase 7).
+- `App.jsx`: solo el bloque `{/* Cola de Reproducción Compartida e Historial */}`. Etiquetas de tab en formato mockup ("Cola · N"). Fila de cola: índice + carátula + nombre + chip `addedBy` + artista + Quitar (misma condición `host || item.addedBy === guestName`); atributos `draggable`/`onDrag*` y `animationDelay` intactos. Fila de historial: subline "chip · artista · hace X" (antes chip y hora iban apilados a la derecha), 3 acciones host (▶/🗑/+) y solo + para invitado, con el mismo estado success/disabled del re-agregado.
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub con endpoint `/queue/reorder` real añadido, desktop 1340×864):
+  - **Host — cola:** tabs "Cola · 3 / Historial · 2" con subrayado activo; **drag&drop** sintético fila 1→3: reordena en vivo, la clase `.dragging` sigue a la fila arrastrada, se limpia en dragend y el orden **persiste** tras el PUT reorder + siguiente poll; quitar de cola funciona (probado hasta vaciarla).
+  - **Host — historial:** las 3 acciones por fila: ▶ Reproducir ahora (el reproductor cambió a la canción), 🗑 Eliminar (contador 2→1, probado hasta vaciar), + Re-agregar (cola 3→4 y check verde `.success`).
+  - **Estados vacíos:** "La cola está vacía…" y "Aún no se han reproducido canciones…" con contadores "· 0".
+  - **Invitado (Pepe):** ninguna fila `draggable`; botón Quitar **solo** en su propia canción (agregó "Flowers" → apareció solo ahí, y pudo borrarla); historial con **una sola** acción (re-agregar).
+  - **Tema claro:** tarjeta blanca, tab activa verde, chip con `--greenText` claro (#12813b), textos oscuros.
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.

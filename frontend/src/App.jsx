@@ -1525,128 +1525,107 @@ function App() {
           )}
 
           {/* Cola de Reproducción Compartida e Historial (Pestañas) */}
-          <div className="glass-panel" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-            <div className="tabs-container">
+          <div className="rd-qh">
+            <div className="rd-qh-tabs">
               <button
-                className={`tab-btn ${sidebarTab === 'queue' ? 'active' : ''}`}
+                className={`rd-qh-tab ${sidebarTab === 'queue' ? 'active' : ''}`}
                 onClick={() => setSidebarTab('queue')}
               >
-                Cola ({queue.length})
+                Cola · {queue.length}
               </button>
               <button
-                className={`tab-btn ${sidebarTab === 'history' ? 'active' : ''}`}
+                className={`rd-qh-tab ${sidebarTab === 'history' ? 'active' : ''}`}
                 onClick={() => setSidebarTab('history')}
               >
-                Historial ({history.length})
+                Historial · {history.length}
               </button>
             </div>
 
             {sidebarTab === 'queue' ? (
-              <div className="track-list" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+              <div className="rd-qh-list">
                 {queue.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                    La cola está vacía. ¡Busca una canción y agrégala!
+                  <div className="rd-qh-empty">
+                    La cola está vacía.<br />¡Busca una canción y agrégala!
                   </div>
                 ) : (
                   queue.map((item, index) => (
                     <div
                       key={item.id}
-                      className={`track-item ${draggedIndex === index ? 'dragging' : ''}`}
+                      className={`rd-qh-row ${draggedIndex === index ? 'dragging' : ''}`}
                       style={{ animationDelay: `${index * 0.05}s` }}
                       draggable={appMode === 'host'}
                       onDragStart={(e) => handleDragStart(e, index)}
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragEnd={handleDragEnd}
                     >
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', width: '20px', textAlign: 'center', fontWeight: 600 }}>
-                        {index + 1}
-                      </span>
-                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="track-art" />
-                      <div className="track-info">
-                        <div className="track-title">{item.name}</div>
-                        <div className="track-artist">{item.artists}</div>
+                      <span className="rd-qh-index">{index + 1}</span>
+                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="rd-qh-art" />
+                      <div className="rd-qh-info">
+                        <div className="rd-qh-name">{item.name}</div>
+                        <div className="rd-qh-sub">
+                          <span className="rd-qh-chip">{item.addedBy}</span>
+                          <span className="rd-qh-artist">{item.artists}</span>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span className="added-by-tag">{item.addedBy}</span>
-                        {(appMode === 'host' || item.addedBy === guestName) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeFromQueue(item.id);
-                            }}
-                            className="btn-delete-item"
-                            title="Eliminar de la cola"
-                          >
-                            <Icons.Trash />
-                          </button>
-                        )}
-                      </div>
+                      {(appMode === 'host' || item.addedBy === guestName) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromQueue(item.id);
+                          }}
+                          className="rd-qh-action danger"
+                          title="Eliminar de la cola"
+                        >
+                          <Icons.Trash />
+                        </button>
+                      )}
                     </div>
                   ))
                 )}
               </div>
             ) : (
-              <div className="track-list" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+              <div className="rd-qh-list">
                 {history.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  <div className="rd-qh-empty">
                     Aún no se han reproducido canciones en esta sesión.
                   </div>
                 ) : (
                   history.map((item, index) => (
-                    <div key={item.id} className="track-item" style={{ animationDelay: `${index * 0.05}s` }}>
-                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="track-art" />
-                      <div className="track-info">
-                        <div className="track-title">{item.name}</div>
-                        <div className="track-artist">{item.artists}</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
-                          <span className="added-by-tag">{item.addedBy}</span>
-                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                            {formatPlayedAt(item.playedAt)}
-                          </span>
+                    <div key={item.id} className="rd-qh-row" style={{ animationDelay: `${index * 0.05}s` }}>
+                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="rd-qh-art faded" />
+                      <div className="rd-qh-info">
+                        <div className="rd-qh-name">{item.name}</div>
+                        <div className="rd-qh-sub">
+                          <span className="rd-qh-chip">{item.addedBy}</span>
+                          <span className="rd-qh-artist">{item.artists} · {formatPlayedAt(item.playedAt)}</span>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                          {appMode === 'host' && (
-                            <>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }}
-                                className="btn-icon"
-                                style={{ padding: '0.35rem', color: 'var(--spotify-green)', background: 'rgba(29, 185, 84, 0.1)', borderRadius: '50%' }}
-                                title="Reproducir ahora"
-                              >
-                                <Icons.Play style={{ width: '12px', height: '12px' }} />
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); removeFromHistory(item.id); }}
-                                className="btn-icon"
-                                style={{ padding: '0.35rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderRadius: '50%' }}
-                                title="Eliminar del historial"
-                              >
-                                <Icons.Trash style={{ width: '12px', height: '12px' }} />
-                              </button>
-                            </>
-                          )}
+                      </div>
+                      {appMode === 'host' && (
+                        <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); addToQueue(item); }}
-                            className="btn-icon"
-                            style={{
-                              padding: '0.35rem',
-                              color: queueStatus[item.id || item.uri] === 'success' ? '#1db954' : 'var(--text-secondary)',
-                              background: 'rgba(255, 255, 255, 0.05)',
-                              borderRadius: '50%'
-                            }}
-                            title="Añadir de nuevo a la cola"
-                            disabled={queueStatus[item.id || item.uri] === 'loading'}
+                            onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }}
+                            className="rd-qh-action"
+                            title="Reproducir ahora"
                           >
-                            {queueStatus[item.id || item.uri] === 'success' ? (
-                              <Icons.Check style={{ width: '12px', height: '12px' }} />
-                            ) : (
-                              <Icons.Plus style={{ width: '12px', height: '12px' }} />
-                            )}
+                            <Icons.Play />
                           </button>
-                        </div>
-                      </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeFromHistory(item.id); }}
+                            className="rd-qh-action danger"
+                            title="Eliminar del historial"
+                          >
+                            <Icons.Trash />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); addToQueue(item); }}
+                        className={`rd-qh-action ${queueStatus[item.id || item.uri] === 'success' ? 'success' : ''}`}
+                        title="Añadir de nuevo a la cola"
+                        disabled={queueStatus[item.id || item.uri] === 'loading'}
+                      >
+                        {queueStatus[item.id || item.uri] === 'success' ? <Icons.Check /> : <Icons.Plus />}
+                      </button>
                     </div>
                   ))
                 )}
