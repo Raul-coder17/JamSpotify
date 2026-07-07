@@ -35,8 +35,9 @@ backend/            → Express API (Node.js, CommonJS)
   server.js         → all routes, room state, Spotify polling logic
   db.js             → PostgreSQL helpers + AES-256-CBC token encryption
 frontend/           → React 19 + Vite (ES modules)
-  src/App.jsx       → entire frontend in a single component (~2500 lines)
-  src/App.css       → all styles
+  src/App.jsx       → entire frontend in a single component (~1650 lines)
+  src/index.css     → design system: theme tokens (:root + [data-theme="light"]), keyframes, all component styles
+  src/App.css       → legacy Vite boilerplate (largely unused)
 ```
 
 ### Multi-tenant room model
@@ -53,12 +54,22 @@ When a request arrives for a `roomId` not in the Map, `roomMiddleware` loads it 
 ### Authentication
 
 **Host**: Spotify OAuth via `/api/auth/login` → `/api/callback`. On success:
-- Production: sets `httpOnly` cookie `jam_host_token`, redirects to `/?roomId=...`
-- Development: redirects with token in URL hash `#host_token=...` (known security gap — see REPORTE_TECNICO)
+- Production (`NODE_ENV=production`): sets `httpOnly` cookie `jam_host_token`, redirects to `/?roomId=...` (same origin).
+- Development: redirects to `http://localhost:5173/?roomId=...#host_token=<token>`. The frontend reads the token from the URL hash, saves it to `localStorage.jam_host_token`, then strips the hash. This is origin-independent on purpose: the OAuth `redirect_uri` is `127.0.0.1:3000` while Vite serves `localhost:5173`, so a cookie set on the callback response would NOT be visible to the frontend (different host). Known security gap: token passes through URL/history — see REPORTE_TECNICO.
 
-`isHostRequest(req)` checks `req.cookies.jam_host_token` or `req.headers['x-host-token']` against `room.hostToken`.
+`isHostRequest(req)` checks `req.cookies.jam_host_token` OR `req.headers['x-host-token']` against `room.hostToken`.
+
+> **Dev gotcha:** there is no host cookie in development, so **every** host-authenticated request (routes behind `hostAuthMiddleware`) MUST send the `X-Host-Token` header (value = `localStorage.jam_host_token`). Omitting it works in production (cookie is auto-sent) but returns **403** in dev. When adding a new host-auth `fetch` in `App.jsx`, include `headers: { 'X-Host-Token': hostToken }`.
 
 **Guest**: `POST /guest/join` creates a `guestToken` and sets status to `pending`. Host approves via `POST /guest/approve`. Approved guests pass `x-guest-token` header; verified by `verifyGuestToken(req, name)`.
+
+### Local development gotchas
+
+These bit us during development — keep them in mind:
+
+- **`SPOTIFY_REDIRECT_URI` must be `http://127.0.0.1:3000/api/callback`, not `localhost`.** Spotify no longer allows `localhost` for loopback redirect URIs. Because of this, the dev callback runs on `127.0.0.1:3000` but returns the host token to `localhost:5173` via the URL hash (a cookie can't cross the `127.0.0.1`↔`localhost` origin boundary).
+- **Host-auth requests need the `X-Host-Token` header in dev** (see the gotcha above). A missing header = silent-OK in production (cookie) but **403** in dev.
+- **`EADDRINUSE` on :3000** = a stale `node server.js` still holds the port. Find & kill it: `netstat -ano | findstr :3000` then `taskkill /F /PID <pid>`. On Windows, killing the `npm`/`nodemon` wrapper does not always kill the `node server.js` child.
 
 ### Spotify playback polling
 
@@ -78,13 +89,15 @@ The poll handler inside `server.js` handles:
 
 `App.jsx` is a single React component with all state, all API calls, and all UI. There are no sub-components and no external UI libraries — all icons are inline SVGs in the `Icons` object at the top of the file. `hostToken` is read from `localStorage.jam_host_token`; `guestToken` from `sessionStorage.jam_guest_token`.
 
+**Theming / redesign (in progress):** a light/dark theme system lives in `index.css` as CSS custom properties (`:root` = dark default, `[data-theme="light"]` = light overrides). The active theme is applied by setting `data-theme` on `document.documentElement` (persisted in `localStorage.jamspotify-theme`; toggled by the sun/moon button in the dashboard header). Redesigned screens (welcome, waiting-for-approval, rejected, nickname modal) use `.rd-*` classes built on these tokens; the dashboard still uses the older `.glass-panel` / `.btn-*` classes. The UI redesign is phased and tracked in `PLAN_TRABAJO_REDESIGN.md`.
+
 ### Required environment variables (`backend/.env`)
 
 | Variable | Purpose |
 |---|---|
 | `SPOTIFY_CLIENT_ID` | Spotify Developer Dashboard |
 | `SPOTIFY_CLIENT_SECRET` | Spotify Developer Dashboard |
-| `SPOTIFY_REDIRECT_URI` | Must match Dashboard exactly |
+| `SPOTIFY_REDIRECT_URI` | Must match Dashboard exactly. Local dev: `http://127.0.0.1:3000/api/callback` (Spotify rejects `localhost` for loopback) |
 | `DATABASE_URL` | PostgreSQL connection string (optional — memory-only if absent) |
 | `TOKEN_ENCRYPTION_KEY` | 32 hex bytes (`openssl rand -hex 32`) — tokens stored plaintext if absent |
 | `FRONTEND_URL` | Used for CORS origin in production (e.g. `https://jamspotify.onrender.com`) |
