@@ -935,27 +935,27 @@ function App() {
   // Renderizador: Pantalla de Bienvenida y Elección de Rol
   if (appMode === 'choose') {
     return (
-      <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
-        <div className="glass-panel modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center' }}>
-          <div className="logo" style={{ alignSelf: 'center', fontSize: '2.2rem' }}>
+      <div className="rd-screen">
+        <div className="rd-card" style={{ maxWidth: '452px', padding: '42px 36px' }}>
+          <div className="rd-brand" style={{ fontSize: '28px', marginBottom: '18px' }}>
             <Icons.Spotify />
             <span>JamSpotify</span>
           </div>
-          <p style={{ color: 'var(--text-secondary)' }}>
+          <p style={{ color: 'var(--text2)', fontSize: '15px', lineHeight: 1.6, margin: '0 0 26px' }}>
             Comparte la cola de reproducción de Spotify en tu sala o fiesta. Cualquiera puede agregar canciones escaneando un código QR.
           </p>
 
           {urlError === 'not_authorized' && (
-            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '0.75rem', padding: '1rem 1.25rem', textAlign: 'left' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.28)', borderRadius: '14px', padding: '16px 18px', textAlign: 'left', marginBottom: '18px' }}>
               <p style={{ color: '#f87171', fontWeight: 700, marginBottom: '0.4rem' }}>Acceso no permitido</p>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+              <p style={{ color: 'var(--text2)', fontSize: '0.88rem', lineHeight: 1.5 }}>
                 Tu cuenta de Spotify no está registrada para usar esta aplicación. Contacta al administrador para que te agregue a la lista de acceso.
               </p>
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-            <a href="/api/auth/login" className="btn-primary" style={{ textDecoration: 'none' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <a href="/api/auth/login" className="rd-btn-primary">
               <Icons.Spotify />
               Iniciar como Anfitrión
             </a>
@@ -966,16 +966,37 @@ function App() {
                   setAppMode('guest');
                   if (!guestName) setShowNickModal(true);
                 }}
-                className="btn-secondary"
+                className="rd-btn-secondary"
               >
                 Unirse como Invitado
               </button>
             )}
             {!roomId && (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text3)', textAlign: 'center', marginTop: '0.25rem' }}>
                 Para unirte como invitado, escanea el código QR del anfitrión.
               </p>
             )}
+          </div>
+
+          <div className="rd-features">
+            <div className="rd-feature">
+              <span className="rd-feature-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+              </span>
+              <span className="rd-feature-label">Escanea el QR</span>
+            </div>
+            <div className="rd-feature">
+              <span className="rd-feature-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              </span>
+              <span className="rd-feature-label">Agrega canciones</span>
+            </div>
+            <div className="rd-feature">
+              <span className="rd-feature-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              </span>
+              <span className="rd-feature-label">En tiempo real</span>
+            </div>
           </div>
         </div>
       </div>
@@ -986,22 +1007,22 @@ function App() {
   if (appMode === 'guest' && guestName) {
     if (guestApprovalStatus === 'pending' || guestApprovalStatus === 'not_requested' || !guestApprovalStatus) {
       return (
-        <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
-          <div className="glass-panel modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center', padding: '2.5rem 2rem' }}>
-            <div className="logo" style={{ alignSelf: 'center', fontSize: '2rem' }}>
+        <div className="rd-screen">
+          <div className="rd-card" style={{ maxWidth: '420px', padding: '40px 34px' }}>
+            <div className="rd-brand" style={{ fontSize: '20px', marginBottom: '20px' }}>
               <Icons.Spotify />
               <span>JamSpotify</span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', gap: '6px', margin: '1rem 0' }}>
-              <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite' }}></span>
-              <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite', animationDelay: '0.3s' }}></span>
-              <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite', animationDelay: '0.6s' }}></span>
+            <div className="rd-dots">
+              <span className="rd-dot"></span>
+              <span className="rd-dot" style={{ animationDelay: '0.3s' }}></span>
+              <span className="rd-dot" style={{ animationDelay: '0.6s' }}></span>
             </div>
 
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Esperando Aprobación</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-              Hola <strong>{guestName}</strong>, tu solicitud de acceso ha sido enviada al anfitrión. Pídele que te acepte para poder ingresar y encolar canciones.
+            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '22px', margin: '0 0 12px' }}>Esperando Aprobación</h2>
+            <p style={{ color: 'var(--text2)', fontSize: '14.5px', lineHeight: 1.6, margin: '0 0 26px' }}>
+              Hola <strong style={{ color: 'var(--text)' }}>{guestName}</strong>, tu solicitud de acceso ha sido enviada al anfitrión. Pídele que te acepte para poder ingresar y encolar canciones.
             </p>
 
             <button
@@ -1011,8 +1032,7 @@ function App() {
                 setGuestApprovalStatus('not_requested');
                 setShowNickModal(true);
               }}
-              className="btn-secondary"
-              style={{ marginTop: '0.5rem' }}
+              className="rd-btn-secondary"
             >
               Cambiar Nombre / Cancelar
             </button>
@@ -1023,15 +1043,15 @@ function App() {
 
     if (guestApprovalStatus === 'rejected') {
       return (
-        <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
-          <div className="glass-panel modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center', padding: '2.5rem 2rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-            <div className="logo" style={{ alignSelf: 'center', fontSize: '2rem', color: '#ef4444' }}>
-              <Icons.Spotify />
-              <span>Acceso Denegado</span>
+        <div className="rd-screen">
+          <div className="rd-card" style={{ maxWidth: '420px', padding: '40px 34px', borderColor: 'rgba(239, 68, 68, 0.28)' }}>
+            <div style={{ width: '60px', height: '60px', margin: '0 auto 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239, 68, 68, 0.12)', borderRadius: '50%', color: '#ef4444' }}>
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
             </div>
 
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-              El anfitrión de la sala ha rechazado tu solicitud de acceso para el nombre <strong>{guestName}</strong>.
+            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '22px', margin: '0 0 12px' }}>Acceso Denegado</h2>
+            <p style={{ color: 'var(--text2)', fontSize: '14.5px', lineHeight: 1.6, margin: '0 0 26px' }}>
+              El anfitrión de la sala ha rechazado tu solicitud de acceso para el nombre <strong style={{ color: 'var(--text)' }}>{guestName}</strong>.
             </p>
 
             <button
@@ -1041,8 +1061,7 @@ function App() {
                 setGuestApprovalStatus('not_requested');
                 setShowNickModal(true);
               }}
-              className="btn-primary"
-              style={{ background: '#ef4444', color: '#fff', boxShadow: 'none' }}
+              className="rd-btn-danger"
             >
               Intentar con otro nombre
             </button>
@@ -1624,14 +1643,14 @@ function App() {
 
       {/* Modal para configurar Nickname */}
       {showNickModal && (
-        <div className="modal-overlay">
-          <div className="glass-panel modal-content">
-            <h2 style={{ marginBottom: '0.75rem', fontSize: '1.4rem' }}>¿Cómo te llamas?</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+        <div className="rd-modal-overlay">
+          <div className="rd-card" style={{ maxWidth: '420px', padding: '28px', textAlign: 'left', borderRadius: '22px' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '21px', margin: '0 0 8px' }}>¿Cómo te llamas?</h2>
+            <p style={{ color: 'var(--text2)', fontSize: '13.5px', lineHeight: 1.55, margin: '0 0 20px' }}>
               Ingresa un apodo para que todos en la sala sepan quién encoló cada canción.
             </p>
 
-            <form onSubmit={handleSaveNick} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <form onSubmit={handleSaveNick} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <input
                 type="text"
                 placeholder="Ej. Raúl, María, DJ_Fiesta"
@@ -1639,17 +1658,16 @@ function App() {
                 maxLength="20"
                 value={nickInput}
                 onChange={(e) => setNickInput(e.target.value)}
-                className="input-glow"
-                style={{ paddingLeft: '1.25rem' }}
+                className="rd-input"
                 autoFocus
               />
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 {guestName && (
-                  <button type="button" onClick={() => setShowNickModal(false)} className="btn-secondary">
+                  <button type="button" onClick={() => setShowNickModal(false)} className="rd-btn-secondary" style={{ width: 'auto', padding: '12px 20px', fontSize: '14px' }}>
                     Cancelar
                   </button>
                 )}
-                <button type="submit" className="btn-primary">
+                <button type="submit" className="rd-btn-primary" style={{ width: 'auto', padding: '12px 22px', fontSize: '14px' }}>
                   Empezar
                 </button>
               </div>

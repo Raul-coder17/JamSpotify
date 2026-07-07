@@ -1083,3 +1083,165 @@ p {
     font-size: 1.75rem;
   }
 }
+
+/* ==========================================================================
+   FASE 3 — Pantallas simples (bienvenida, esperando, rechazado, modal nick).
+   Clases del rediseño (prefijo .rd-*), basadas en los tokens de la Fase 1 y
+   [data-theme]. Aisladas: el dashboard NO usa ninguna de estas clases.
+   ========================================================================== */
+.rd-screen {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--bg);
+  background-image: var(--bg-glow);
+  background-attachment: fixed;
+  color: var(--text);
+}
+
+.rd-card {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  box-shadow: var(--shadow);
+  text-align: center;
+  animation: jamup 0.4s ease both;
+}
+
+.rd-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--green);
+}
+.rd-brand svg { width: 1em; height: 1em; }
+.rd-brand span { color: var(--text); }
+
+.rd-btn-primary,
+.rd-btn-secondary,
+.rd-btn-danger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: filter 0.15s ease, border-color 0.15s ease;
+}
+
+.rd-btn-primary {
+  padding: 15px 18px;
+  background: var(--green);
+  border: none;
+  border-radius: 14px;
+  color: var(--onGreen);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 6px 18px var(--greenSoft);
+}
+.rd-btn-primary:hover { filter: brightness(1.06); }
+
+.rd-btn-secondary {
+  padding: 14px 18px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.rd-btn-secondary:hover { border-color: var(--green); }
+
+.rd-btn-danger {
+  padding: 14px 18px;
+  background: #ef4444;
+  border: none;
+  border-radius: 13px;
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.rd-btn-danger:hover { filter: brightness(1.06); }
+
+.rd-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.rd-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--greenSoft);
+}
+
+.rd-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 55;
+  padding: 20px;
+}
+
+.rd-dots {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  margin: 8px 0 22px;
+}
+.rd-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: jampulse 1.5s infinite;
+}
+
+.rd-features {
+  display: flex;
+  gap: 10px;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+.rd-feature {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.rd-feature-icon {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--greenSoft);
+  border-radius: 11px;
+  color: var(--greenText);
+}
+.rd-feature-label {
+  font-size: 11.5px;
+  color: var(--text3);
+  font-weight: 600;
+}

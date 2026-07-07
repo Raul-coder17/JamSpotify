@@ -4,13 +4,13 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 2 completada (toggle de tema). Fase 3 pendiente.
+Fase 3 completada (pantallas simples). Fase 4 pendiente.
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
 1. Fundaciones de estilo (tokens tema + keyframes en index.css) — ✅ hecho
 2. Toggle de tema claro/oscuro — ✅ hecho
-3. Pantallas simples (bienvenida, esperando, rechazado, modal nickname) — pendiente
+3. Pantallas simples (bienvenida, esperando, rechazado, modal nickname) — ✅ hecho
 4. Dashboard: reestructuración 3 columnas + reinyección de gaps funcionales — pendiente
 5. Switch Álbum/Vinilo — pendiente
 6. Layout móvil (tabs + mini-player) — pendiente
@@ -56,3 +56,22 @@ Fase 2 completada (toggle de tema). Fase 3 pendiente.
 - Prueba en navegador (Vite dev + preview): al cargar, `data-theme="dark"` aplicado por el efecto; al conmutar a `light`, `--bg`/`--surface`/`--text`/`--greenText` cambian a los valores claros de la Fase 1 en tiempo real; `localStorage['jamspotify-theme']='light'`; **tras recargar**, React inicializa en `light` y aplica los tokens claros. Sin errores de consola.
 
 **Archivos tocados:** `frontend/src/App.jsx` (adiciones acotadas). Nota: se creó `.claude/launch.json` (config del dev server para preview) — tooling local, sin trackear, fuera de este commit.
+
+### Fase 3 — Pantallas simples (App.jsx + index.css)
+**Qué cambió:** se reimplementó el **markup** de 4 vistas (bienvenida, esperando aprobación, rechazado, modal nickname) con el estilo del rediseño. **No se tocó ningún handler, estado, prop ni useEffect** — solo el JSX de presentación y las clases. El dashboard y su lógica quedaron intactos.
+- `index.css`: se agregó un bloque de clases con prefijo `.rd-*` (`.rd-screen`, `.rd-card`, `.rd-brand`, `.rd-btn-primary/secondary/danger`, `.rd-input`, `.rd-modal-overlay`, `.rd-dots`/`.rd-dot`, `.rd-features`/`.rd-feature*`) construidas sobre los tokens de la Fase 1 y `[data-theme]`. Aisladas: el dashboard no usa ninguna. No se eliminó ni modificó ninguna clase previa (`.glass-panel`, `.btn-primary`, etc. siguen para el dashboard).
+- `App.jsx`: los 4 bloques `return`/markup pasaron de `.app-container`/`.glass-panel`/`.logo`/`.btn-*`/`.input-glow`/`.modal-overlay` (tokens viejos) a las clases `.rd-*` (tokens nuevos). Se conservaron literalmente: `href="/api/auth/login"`, los `onClick` (setAppMode, setShowNickModal, `localStorage.removeItem('jam_guest_name')` + reset de estado), el `<form onSubmit={handleSaveNick}>`, los atributos del input (`required`, `maxLength`, `value`, `onChange`, `autoFocus`), y las condiciones (`urlError === 'not_authorized'`, `roomId`, `guestName`).
+- `.gitignore`: se añadió `.claude/launch.json` (no se trackea).
+
+**Antes/después:**
+- Antes: 4 pantallas con el estilo viejo (glassmorphism oscuro, vars antiguas), sin respuesta al tema claro.
+- Después: 4 pantallas con tarjetas `--surface`, tipografía Outfit/Inter, botones y features del mockup; **responden a dark/light** heredando los tokens del `data-theme` del elemento raíz.
+
+**Cómo se validó:**
+- `npm run build` → exitoso.
+- `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend memory-only + preview): las **4 pantallas** verificadas visualmente en **dark y light**:
+  - Bienvenida (dark/light), Esperando aprobación (dark/light), Rechazado (dark/light), Modal nickname (light). Rejected se forzó interceptando el poll `/guest/status` → `{status:'rejected'}` para ejercitar el render real de React.
+  - Sin errores de consola nuevos atribuibles al rediseño: los únicos errores (`Error cargando info de sala`, `App.jsx:547`) provienen del fetch a `/info` contra la sala de prueba inexistente `demo` (manejo de error preexistente), no de la Fase 3.
+
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `.gitignore`.
