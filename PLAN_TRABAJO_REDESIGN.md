@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 4 en curso: sub-ítem 4.A (cascarón 3 columnas) completado. Siguen 4.B–4.G.
+Fase 4 en curso: 4.A (cascarón) y 4.B (reproductor col A) completados. Siguen 4.C–4.G.
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -13,7 +13,7 @@ Fase 4 en curso: sub-ítem 4.A (cascarón 3 columnas) completado. Siguen 4.B–4
 3. Pantallas simples (bienvenida, esperando, rechazado, modal nickname) — ✅ hecho
 4. Dashboard: reestructuración 3 columnas + reinyección de gaps funcionales — en curso
    - 4.A Cascarón estructural (shell 100vh + header + grid 3 col) — ✅ hecho
-   - 4.B Columna A: reproductor (carátula álbum, transporte 5 botones, volumen, estado vacío) — pendiente
+   - 4.B Columna A: reproductor (carátula álbum, transporte 5 botones, volumen, estado vacío) — ✅ hecho
    - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — pendiente
    - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — pendiente
    - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — pendiente
@@ -115,4 +115,18 @@ Fase 4 en curso: sub-ítem 4.A (cascarón 3 columnas) completado. Siguen 4.B–4
   - **Invitado** (`mode=guest` aprobado por stub): pill "Sala de …", tag + Editar; sin transporte/volumen/seek/reset/Invitar/panel compartir; 0 botones de borrado en canciones ajenas.
   - **<1000px (817px):** columnas apiladas a ancho completo con scroll de página.
   - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 4.B — Columna A: reproductor (App.jsx + index.css)
+**Qué cambió:** restilizado completo de la tarjeta del reproductor. **Ningún handler, estado, prop ni useEffect tocado** — mismos `seekAbsolute`, `seekRelative`, `togglePlay`, `skipPrevious/Next`, `toggleMute`, `handleVolumeChange`, `setShowDeviceSelector` y expresiones de volumen, solo cambió el JSX de presentación y las clases.
+- `index.css` (aditivo): bloque `.rd-player-*` sobre tokens del rediseño — `.rd-player` (tarjeta `--surface`, radius 22, `flex:1 0 auto` para llenar la columna sin encoger), `.rd-player-label` (REPRODUCIENDO), `.rd-player-art` (carátula **cuadrada 200px** con imagen real de Spotify; el vinilo giratorio se retira — el switch álbum/vinilo llega en Fase 5), `.rd-player-eq` (insignia ecualizador flotante sobre la carátula, 4 barras `jameq`, estado `.paused` estático; sustituye al texto "Sonando/Pausado" + visualizador viejo, el estado queda en el `title` y en la animación), `.rd-player-title/artist`, `.rd-player-progress/track/fill/times` (track 6px, `.clickable` con cursor pointer), `.rd-player-transport` + `.rd-player-btn`/`-seek`/`.rd-player-play` (5 botones: prev, −15s, play 56px verde, +15s, next — mismo orden que antes), `.rd-player-volume` (pill `--surface2` con mute + range `accent-color` + %), `.rd-player-empty*` (estado vacío: placeholder 200px con logo, título, texto y botón `rd-btn-primary` Seleccionar Reproductor). Las clases viejas (`.player-card`, `.vinyl-*`, `.visualizer-*`, `.playback-controls`, `.volume-*`, `.progress-*`) quedan sin uso en el dashboard pero intactas (limpieza en Fase 7).
+- `App.jsx`: solo el bloque `{/* Card Reproductor Actual */}`. Condicionales preservados: transporte+volumen solo host, barra clicable solo host (invitado ve progreso sin cursor ni onClick), botón Seleccionar Reproductor solo host en estado vacío.
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub en :3000, desktop 1340×864):
+  - **Estructura:** label, carátula `<img>` real, insignia EQ (4 barras), título/artista, transporte de 5 botones con títulos correctos, pill de volumen con slider y %. La tarjeta llena exactamente la altura de la columna A (757px) sin overflow horizontal a 300px.
+  - **Funcional (host):** seek +15s (1:51→2:07), clic al 25% de la barra (→0:53 de 3:34), play/pausa (EQ pasa a `.paused` con animación detenida y `title` "Pausado", y vuelve al reanudar), mute (→0%), slider a 80 (→80%).
+  - **Invitado:** ve label/carátula/EQ/título/progreso; sin `.clickable`, sin transporte, sin volumen.
+  - **Estado vacío** (interceptando el poll `/playback` → `currentlyPlaying:null`): placeholder + "Sin reproducción activa" + texto + botón Seleccionar Reproductor que abre el selector de dispositivos.
+  - **Tema claro:** tarjeta blanca (`--surface`) y textos oscuros conmutando en vivo.
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.

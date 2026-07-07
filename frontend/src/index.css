@@ -1430,3 +1430,249 @@ p {
     min-height: auto;
   }
 }
+
+/* ==========================================================================
+   Fase 4.B — Columna A: tarjeta del reproductor.
+   Carátula estilo álbum (el switch álbum/vinilo llega en Fase 5).
+   ========================================================================== */
+.rd-player {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow: hidden;
+  flex: 1 0 auto; /* llena la columna, sin encoger por debajo del contenido */
+}
+
+.rd-player-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.rd-player-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+}
+
+.rd-player-art-wrap {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin-bottom: 22px;
+  flex-shrink: 0;
+}
+
+.rd-player-art {
+  width: 200px;
+  height: 200px;
+  border-radius: 20px;
+  object-fit: cover;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  display: block;
+}
+
+/* Insignia ecualizador flotante (estado sonando/pausado) */
+.rd-player-eq {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 22px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  box-sizing: content-box;
+}
+.rd-player-eq-bar {
+  width: 3px;
+  height: 14px;
+  background: var(--green);
+  border-radius: 2px;
+  transform-origin: bottom;
+  animation: jameq 0.9s ease-in-out infinite;
+}
+.rd-player-eq-bar:nth-child(2) { animation-delay: 0.15s; }
+.rd-player-eq-bar:nth-child(3) { animation-delay: 0.3s; }
+.rd-player-eq.paused .rd-player-eq-bar {
+  animation: none;
+  transform: scaleY(0.35);
+}
+
+.rd-player-title {
+  width: 100%;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rd-player-artist {
+  width: 100%;
+  color: var(--greenText);
+  font-weight: 600;
+  font-size: 14px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rd-player-progress {
+  width: 100%;
+  margin-top: 18px;
+}
+.rd-player-track {
+  width: 100%;
+  height: 6px;
+  background: var(--track);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.rd-player-track.clickable { cursor: pointer; }
+.rd-player-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 99px;
+}
+.rd-player-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--text3);
+  font-variant-numeric: tabular-nums;
+}
+
+.rd-player-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.rd-player-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.rd-player-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.rd-player-btn-seek {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.rd-player-play {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--green);
+  border: none;
+  border-radius: 50%;
+  color: var(--onGreen);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 8px 22px var(--greenSoft);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.rd-player-play:hover {
+  filter: brightness(1.07);
+  transform: scale(1.04);
+}
+
+.rd-player-volume {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 18px;
+  width: 100%;
+  padding: 9px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.rd-player-mute {
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  display: flex;
+  padding: 0;
+}
+.rd-player-mute:hover { color: var(--text); }
+.rd-player-volrange {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--green);
+  height: 4px;
+  cursor: pointer;
+}
+.rd-player-vol-label {
+  font-size: 12px;
+  color: var(--text3);
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Estado vacío: sin reproducción activa */
+.rd-player-empty { gap: 16px; }
+.rd-player-empty-art {
+  width: 200px;
+  height: 200px;
+  border-radius: 20px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+}
+.rd-player-empty-art svg { width: 56px; height: 56px; opacity: 0.55; }
+.rd-player-empty-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+  margin: 0;
+}
+.rd-player-empty-text {
+  color: var(--text2);
+  font-size: 13.5px;
+  line-height: 1.6;
+  max-width: 240px;
+  margin: 0;
+}

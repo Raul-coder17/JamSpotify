@@ -1255,52 +1255,41 @@ function App() {
         )}
 
           {/* Card Reproductor Actual */}
-          <div className="glass-panel player-card">
+          <div className="rd-player">
+            <span className="rd-player-label">Reproduciendo</span>
             {currentlyPlaying ? (
-              <>
-                {/* Visualizador Flotante */}
-                <div style={{ position: 'absolute', top: '1.25rem', right: '1.5rem', display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    {currentlyPlaying.isPlaying ? 'Sonando' : 'Pausado'}
-                  </span>
-                  <div className={`visualizer-container ${!currentlyPlaying.isPlaying ? 'visualizer-paused' : ''}`}>
-                    <div className="visualizer-bar"></div>
-                    <div className="visualizer-bar"></div>
-                    <div className="visualizer-bar"></div>
-                    <div className="visualizer-bar"></div>
-                    <div className="visualizer-bar"></div>
-                  </div>
-                </div>
-
-                {/* Vinilo */}
-                <div className="vinyl-container">
-                  <div className={`vinyl-disc ${currentlyPlaying.isPlaying ? 'spin-animation' : 'spin-animation spin-paused'}`}>
-                    <img
-                      src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
-                      alt={currentlyPlaying.name}
-                      className="vinyl-cover"
-                    />
-                    <div className="vinyl-center-hole"></div>
+              <div className="rd-player-body">
+                {/* Carátula álbum + insignia ecualizador */}
+                <div className="rd-player-art-wrap">
+                  <img
+                    src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
+                    alt={currentlyPlaying.name}
+                    className="rd-player-art"
+                  />
+                  <div
+                    className={`rd-player-eq ${!currentlyPlaying.isPlaying ? 'paused' : ''}`}
+                    title={currentlyPlaying.isPlaying ? 'Sonando' : 'Pausado'}
+                  >
+                    <span className="rd-player-eq-bar"></span>
+                    <span className="rd-player-eq-bar"></span>
+                    <span className="rd-player-eq-bar"></span>
+                    <span className="rd-player-eq-bar"></span>
                   </div>
                 </div>
 
                 {/* Información de Canción */}
-                <h2 style={{ fontSize: '1.6rem', marginBottom: '0.3rem', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {currentlyPlaying.name}
-                </h2>
-                <p style={{ color: 'var(--spotify-green)', fontWeight: 500, marginBottom: '1.5rem', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {currentlyPlaying.artists}
-                </p>
+                <div className="rd-player-title">{currentlyPlaying.name}</div>
+                <div className="rd-player-artist">{currentlyPlaying.artists}</div>
 
                 {/* Barra de progreso */}
-                <div className="progress-bar-container">
+                <div className="rd-player-progress">
                   <div
-                    className={`progress-track ${appMode === 'host' ? 'clickable' : ''}`}
+                    className={`rd-player-track ${appMode === 'host' ? 'clickable' : ''}`}
                     onClick={appMode === 'host' ? seekAbsolute : undefined}
                   >
-                    <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
+                    <div className="rd-player-fill" style={{ width: `${progressPercent}%` }}></div>
                   </div>
-                  <div className="progress-time">
+                  <div className="rd-player-times">
                     <span>{formatTime(currentlyPlaying.progressMs)}</span>
                     <span>{formatTime(currentlyPlaying.durationMs)}</span>
                   </div>
@@ -1309,31 +1298,30 @@ function App() {
                 {/* Controles del Anfitrión */}
                 {appMode === 'host' && (
                   <>
-                    <div className="playback-controls">
-                      <button onClick={skipPrevious} className="btn-icon" title="Anterior">
+                    <div className="rd-player-transport">
+                      <button onClick={skipPrevious} className="rd-player-btn" title="Anterior">
                         <Icons.Prev />
                       </button>
-                      <button onClick={() => seekRelative(-15)} className="btn-icon btn-seek" title="Retroceder 15s">
+                      <button onClick={() => seekRelative(-15)} className="rd-player-btn rd-player-btn-seek" title="Retroceder 15s">
                         -15s
                       </button>
-                      <button onClick={togglePlay} className="btn-icon play-pause">
+                      <button onClick={togglePlay} className="rd-player-play" title="Reproducir / Pausar">
                         {currentlyPlaying.isPlaying ? <Icons.Pause /> : <Icons.Play />}
                       </button>
-                      <button onClick={() => seekRelative(15)} className="btn-icon btn-seek" title="Avanzar 15s">
+                      <button onClick={() => seekRelative(15)} className="rd-player-btn rd-player-btn-seek" title="Avanzar 15s">
                         +15s
                       </button>
-                      <button onClick={skipNext} className="btn-icon" title="Siguiente">
+                      <button onClick={skipNext} className="rd-player-btn" title="Siguiente">
                         <Icons.Skip />
                       </button>
                     </div>
 
                     {/* Control de Volumen (Solo Host) */}
-                    <div className="volume-control-container">
+                    <div className="rd-player-volume">
                       <button
                         onClick={toggleMute}
-                        className="btn-icon"
+                        className="rd-player-mute"
                         title={isMuted ? 'Quitar Silencio' : 'Silenciar'}
-                        style={{ padding: '0.2rem', color: 'var(--text-secondary)' }}
                       >
                         {isMuted || (localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)) === 0 ? (
                           <Icons.VolumeMuted />
@@ -1347,29 +1335,31 @@ function App() {
                         max="100"
                         value={localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}
                         onChange={handleVolumeChange}
-                        className="volume-slider"
+                        className="rd-player-volrange"
                         title={`Volumen: ${localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}%`}
                       />
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', minWidth: '32px', textAlign: 'right' }}>
+                      <span className="rd-player-vol-label">
                         {localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}%
                       </span>
                     </div>
                   </>
                 )}
-              </>
+              </div>
             ) : (
-              <div style={{ padding: '3rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
-                <div className="vinyl-container">
-                  <div className="vinyl-disc">
-                    <div className="vinyl-center-hole"></div>
-                  </div>
+              <div className="rd-player-body rd-player-empty">
+                <div className="rd-player-empty-art">
+                  <Icons.Spotify />
                 </div>
-                <h3>Sin reproducción activa</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '320px' }}>
+                <h3 className="rd-player-empty-title">Sin reproducción activa</h3>
+                <p className="rd-player-empty-text">
                   El Host debe abrir Spotify en cualquier dispositivo y reproducir música para iniciar la sesión.
                 </p>
                 {appMode === 'host' && (
-                  <button onClick={() => setShowDeviceSelector(true)} className="btn-primary" style={{ marginTop: '0.5rem' }}>
+                  <button
+                    onClick={() => setShowDeviceSelector(true)}
+                    className="rd-btn-primary"
+                    style={{ width: 'auto', padding: '12px 18px', fontSize: '14px' }}
+                  >
                     <Icons.Device /> Seleccionar Reproductor
                   </button>
                 )}
