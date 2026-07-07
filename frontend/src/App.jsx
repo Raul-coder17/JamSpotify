@@ -84,6 +84,17 @@ const Icons = {
       <line x1="12" y1="5" x2="12" y2="19"></line>
       <line x1="5" y1="12" x2="19" y2="12"></line>
     </svg>
+  ),
+  Sun: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+    </svg>
+  ),
+  Moon: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+    </svg>
   )
 };
 
@@ -134,6 +145,9 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [errorAlert, setErrorAlert] = useState(null);
 
+  // Tema claro/oscuro (Fase 2) — persistido en localStorage, default oscuro
+  const [theme, setTheme] = useState(() => localStorage.getItem('jamspotify-theme') || 'dark');
+
   // Ref para barra de progreso
   const progressTimerRef = useRef(null);
   // Ref para bloquear sincronización de volumen durante ajuste manual
@@ -146,6 +160,14 @@ function App() {
 
   // Mantener ref de currentlyPlaying sincronizado para lecturas sin re-render
   useEffect(() => { currentlyPlayingRef.current = currentlyPlaying; }, [currentlyPlaying]);
+
+  // Aplicar y persistir el tema en el elemento raíz del documento (cubre todas las pantallas)
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('jamspotify-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
 
   // Helper: construye URLs de sala → /api/rooms/:roomId/<path>
   const r = (path) => `/api/rooms/${roomId}${path}`;
@@ -1051,6 +1073,16 @@ function App() {
         )}
 
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button
+            onClick={toggleTheme}
+            className="btn-secondary"
+            title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+            aria-label="Cambiar tema"
+            style={{ padding: '0.5rem', width: '38px', height: '38px' }}
+          >
+            {theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}
+          </button>
+
           {appMode === 'host' && (
             <>
               <button
