@@ -81,3 +81,9 @@ Fase 3 completada (pantallas simples). Fase 4 pendiente.
 **Arreglo:** en dev, el callback ahora devuelve el token del host por el **hash de la URL** (`#host_token=...`), independiente del origen (patrón ya documentado en CLAUDE.md). El frontend lo lee en el efecto de arranque, lo guarda en `localStorage.jam_host_token` y limpia el hash. Producción (cookie httpOnly) sin cambios.
 **Archivos:** `backend/server.js` (rama dev del callback), `frontend/src/App.jsx` (efecto de auto-detección).
 **Validado:** build OK, 0 lint nuevos, y en navegador el token del hash se captura en `localStorage` y el hash se limpia conservando `?roomId=`. El intercambio real con Spotify queda pendiente de prueba del usuario.
+
+### Fix intermedio 2 — Header X-Host-Token faltante en llamadas de host (dev)
+**Problema:** `GET /guest/pending` (y `POST /auth/logout`) se llamaban **sin** el header `X-Host-Token`. En producción funciona porque la cookie httpOnly `jam_host_token` viaja sola; en dev (sin esa cookie) el backend respondía **403** → el host no veía las solicitudes de invitados aunque la terminal las registrara, y no podía aprobarlas. Reproducción/búsqueda/otros controles sí funcionaban porque esos fetch ya mandaban el header.
+**Arreglo:** añadido `headers: { 'X-Host-Token': hostToken }` a los fetch de `/guest/pending` (+ `hostToken` en las deps del efecto de polling) y `/auth/logout`. Auditados los 14 endpoints host-auth: el resto ya lo enviaba.
+**Archivos:** `frontend/src/App.jsx`.
+**Validado:** build OK, 0 lint nuevos. Confirmación end-to-end (aparición del invitado pendiente) pendiente de re-prueba del usuario con una sala real.

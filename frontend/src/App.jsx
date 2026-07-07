@@ -271,7 +271,10 @@ function App() {
     if (appMode !== 'host' || !isAuthenticated) return;
 
     const fetchPending = () => {
-      fetch(r('/guest/pending'))
+      // En dev la auth del host va por header X-Host-Token (no hay cookie httpOnly).
+      fetch(r('/guest/pending'), {
+        headers: hostToken ? { 'X-Host-Token': hostToken } : {}
+      })
         .then(res => res.json())
         .then(data => setPendingApprovals(data || []))
         .catch(err => console.error('Error al obtener solicitudes pendientes:', err));
@@ -280,7 +283,7 @@ function App() {
     fetchPending();
     const interval = setInterval(fetchPending, 1000);
     return () => clearInterval(interval);
-  }, [appMode, isAuthenticated]);
+  }, [appMode, isAuthenticated, hostToken]);
 
   // Polling de reproducción y cola (cada 2.5 segundos)
   useEffect(() => {
@@ -900,7 +903,10 @@ function App() {
 
   // Cerrar Sesión Spotify
   const handleLogout = () => {
-    fetch(r('/auth/logout'), { method: 'POST' })
+    fetch(r('/auth/logout'), {
+      method: 'POST',
+      headers: hostToken ? { 'X-Host-Token': hostToken } : {}
+    })
       .then(() => {
         localStorage.removeItem('jam_host_token');
         window.location.href = '/';
