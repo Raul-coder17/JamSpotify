@@ -75,3 +75,9 @@ Fase 3 completada (pantallas simples). Fase 4 pendiente.
   - Sin errores de consola nuevos atribuibles al rediseño: los únicos errores (`Error cargando info de sala`, `App.jsx:547`) provienen del fetch a `/info` contra la sala de prueba inexistente `demo` (manejo de error preexistente), no de la Fase 3.
 
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `.gitignore`.
+
+### Fix intermedio — Login OAuth en desarrollo (NO es rediseño)
+**Problema:** con `redirect_uri` en `127.0.0.1:3000` (obligado por Spotify) y Vite en `localhost:5173`, el callback fijaba la cookie de host en `127.0.0.1` y redirigía a `localhost` → cookie invisible → el anfitrión nunca se autenticaba → no controlaba reproducción ni podía aprobar invitados. Ajeno al rediseño (preexistente).
+**Arreglo:** en dev, el callback ahora devuelve el token del host por el **hash de la URL** (`#host_token=...`), independiente del origen (patrón ya documentado en CLAUDE.md). El frontend lo lee en el efecto de arranque, lo guarda en `localStorage.jam_host_token` y limpia el hash. Producción (cookie httpOnly) sin cambios.
+**Archivos:** `backend/server.js` (rama dev del callback), `frontend/src/App.jsx` (efecto de auto-detección).
+**Validado:** build OK, 0 lint nuevos, y en navegador el token del hash se captura en `localStorage` y el hash se limpia conservando `?roomId=`. El intercambio real con Spotify queda pendiente de prueba del usuario.

@@ -373,13 +373,11 @@ app.get('/api/callback', async (req, res) => {
       });
       res.redirect(`/?roomId=${roomId}`);
     } else {
-      res.cookie('jam_host_token_dev', room.hostToken, {
-        httpOnly: false,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: 60 * 1000
-      });
-      res.redirect(`http://localhost:5173/?roomId=${roomId}`);
+      // Dev: Vite (localhost:5173) y el callback (redirect_uri en 127.0.0.1:3000) tienen
+      // orígenes distintos, así que una cookie no sería visible para el frontend. Pasamos
+      // el token del host por el hash de la URL (#host_token=...), independiente del origen;
+      // el frontend lo lee, lo guarda y limpia el hash de inmediato.
+      res.redirect(`http://localhost:5173/?roomId=${roomId}#host_token=${room.hostToken}`);
     }
   } catch (error) {
     console.error('[Error Callback]', error);

@@ -183,12 +183,20 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
 
-    // En desarrollo el OAuth callback setea una cookie temporal 'jam_host_token_dev'
-    const devCookie = document.cookie.split('; ').find(c => c.startsWith('jam_host_token_dev='));
-    const tokenFromCookie = devCookie ? devCookie.split('=')[1] : null;
-    if (tokenFromCookie) {
-      setHostToken(tokenFromCookie);
-      localStorage.setItem('jam_host_token', tokenFromCookie);
+    // En desarrollo el OAuth callback devuelve el token del host en el hash de la URL
+    // (#host_token=...), independiente del origen. Respaldo: cookie 'jam_host_token_dev'.
+    let devToken;
+    if (window.location.hash.startsWith('#host_token=')) {
+      devToken = decodeURIComponent(window.location.hash.slice('#host_token='.length));
+      // Limpiar el hash de la URL sin recargar (conserva ?roomId=...)
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } else {
+      const devCookie = document.cookie.split('; ').find(c => c.startsWith('jam_host_token_dev='));
+      devToken = devCookie ? devCookie.split('=')[1] : null;
+    }
+    if (devToken) {
+      setHostToken(devToken);
+      localStorage.setItem('jam_host_token', devToken);
       document.cookie = 'jam_host_token_dev=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     }
 
