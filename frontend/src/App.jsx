@@ -1373,55 +1373,55 @@ function App() {
         <section className="rd-dash-col">
 
           {/* Panel de Búsqueda (Para invitados y host también) */}
-          <div className="glass-panel">
-            <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              Buscar y Proponer Canción
-            </h2>
-
-            <div className="search-input-wrapper">
-              <input
-                type="text"
-                placeholder="Busca por canción, artista..."
-                className="input-glow"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span className="search-icon-inside"><Icons.Search /></span>
+          <div className="rd-search">
+            <div className="rd-search-head">
+              <h2 className="rd-search-title">Buscar y proponer canción</h2>
+              <div className="rd-search-input-wrap">
+                <span className="rd-search-icon"><Icons.Search /></span>
+                <input
+                  type="text"
+                  placeholder="Busca por canción, artista..."
+                  className="rd-search-input"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
 
+            {searchQuery.trim() !== '' && (
+              <div className="rd-search-heading">Resultados</div>
+            )}
+
             {isSearching && (
-              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>
-                Buscando en Spotify...
-              </div>
+              <div className="rd-search-status">Buscando en Spotify...</div>
             )}
 
             {!isSearching && searchResults.length > 0 && (
-              <div className="track-list" style={{ maxHeight: '350px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+              <div className="rd-search-list">
                 {searchResults.map(track => {
                   const status = queueStatus[track.id];
                   return (
-                    <div key={track.id} className="track-item">
-                      <img src={track.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={track.name} className="track-art" />
-                      <div className="track-info">
-                        <div className="track-title">{track.name}</div>
-                        <div className="track-artist">{track.artists}</div>
+                    <div key={track.id} className="rd-search-row">
+                      <img src={track.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={track.name} className="rd-search-art" />
+                      <div className="rd-search-info">
+                        <div className="rd-search-name">{track.name}</div>
+                        <div className="rd-search-artist">{track.artists}</div>
                       </div>
 
                       <button
                         onClick={() => addToQueue(track)}
-                        className="btn-secondary"
+                        className={
+                          status === 'success' ? 'rd-search-chip' :
+                          status === 'duplicate' ? 'rd-search-chip muted' :
+                          status === 'error' ? 'rd-search-add error' :
+                          'rd-search-add'
+                        }
                         disabled={status === 'loading' || status === 'duplicate'}
-                        style={{
-                          padding: '0.4rem 0.8rem',
-                          fontSize: '0.8rem',
-                          borderColor: status === 'success' ? 'var(--spotify-green)' : status === 'duplicate' ? 'var(--text-secondary)' : 'var(--border-glass)',
-                          color: status === 'success' ? 'var(--spotify-green)' : status === 'duplicate' ? 'var(--text-secondary)' : 'var(--text-primary)'
-                        }}
                       >
                         {status === 'loading' ? 'Agregando...' :
                           status === 'success' ? <><Icons.Check /> Agregada</> :
                           status === 'duplicate' ? 'Ya en cola' :
-                          status === 'error' ? 'Error al agregar' : 'Agregar'}
+                          status === 'error' ? 'Error al agregar' : <><Icons.Plus /> Agregar</>}
                       </button>
                     </div>
                   );
@@ -1430,9 +1430,7 @@ function App() {
             )}
 
             {searchQuery && !isSearching && searchResults.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                No se encontraron resultados para "{searchQuery}"
-              </div>
+              <div className="rd-search-status">No se encontraron resultados para "{searchQuery}"</div>
             )}
           </div>
 

@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-Fase 4 en curso: 4.A (cascarón) y 4.B (reproductor col A) completados. Siguen 4.C–4.G.
+Fase 4 en curso: 4.A (cascarón), 4.B (reproductor) y 4.C (buscador) completados. Siguen 4.D–4.G.
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -14,7 +14,7 @@ Fase 4 en curso: 4.A (cascarón) y 4.B (reproductor col A) completados. Siguen 4
 4. Dashboard: reestructuración 3 columnas + reinyección de gaps funcionales — en curso
    - 4.A Cascarón estructural (shell 100vh + header + grid 3 col) — ✅ hecho
    - 4.B Columna A: reproductor (carátula álbum, transporte 5 botones, volumen, estado vacío) — ✅ hecho
-   - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — pendiente
+   - 4.C Columna B: buscador (input, filas, botón Agregar 4 estados) — ✅ hecho
    - 4.D Columna C: cola/historial (tabs, drag&drop, permisos, 3 acciones historial) — pendiente
    - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — pendiente
    - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — pendiente
@@ -129,4 +129,17 @@ Fase 4 en curso: 4.A (cascarón) y 4.B (reproductor col A) completados. Siguen 4
   - **Invitado:** ve label/carátula/EQ/título/progreso; sin `.clickable`, sin transporte, sin volumen.
   - **Estado vacío** (interceptando el poll `/playback` → `currentlyPlaying:null`): placeholder + "Sin reproducción activa" + texto + botón Seleccionar Reproductor que abre el selector de dispositivos.
   - **Tema claro:** tarjeta blanca (`--surface`) y textos oscuros conmutando en vivo.
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 4.C — Columna B: buscador (App.jsx + index.css)
+**Qué cambió:** restilizado del panel de búsqueda. **Ningún handler, estado, prop, debounce ni useEffect tocado** — mismos `setSearchQuery`, `addToQueue`, `queueStatus`, mismas condiciones de render y el mismo `disabled={loading || duplicate}`; solo JSX de presentación y clases.
+- `index.css` (aditivo): bloque `.rd-search-*` — `.rd-search` (tarjeta `--surface`, `flex:1 1 auto; min-height:0; overflow:hidden` para llenar la columna con scroll interno de la lista), `.rd-search-head/title`, `.rd-search-input` con icono interior absoluto (`.rd-search-icon`) y focus verde con anillo `--greenSoft`, `.rd-search-heading` ("RESULTADOS", visible solo con query), `.rd-search-list` (scroll interno), `.rd-search-row/art/info/name/artist` (filas con hover `--surface2` y `jamup`), y los 4+1 estados del botón: `.rd-search-add` (pill outline "+ Agregar"; deshabilitada+opaca en loading "Agregando…"; variante `.error` con borde/texto rojos "Error al agregar", clicable para reintentar), `.rd-search-chip` (chip verde "✓ Agregada") y `.rd-search-chip.muted` (chip atenuado "Ya en cola", deshabilitado). Media query <1000px: `.rd-search { max-height:70vh }` para scroll interno en el apilado temporal. Clases viejas (`.search-input-wrapper`, `.input-glow`, `.track-list/item/art/info`) intactas (aún las usa la columna C hasta 4.D; limpieza en Fase 7).
+- `App.jsx`: solo el bloque `{/* Panel de Búsqueda */}`. Título en sentence case como el mockup ("Buscar y proponer canción"). El botón conmuta clase por `queueStatus` (misma lógica ternaria de antes, ahora en `className` en vez de estilos inline).
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub, desktop 1340×864):
+  - **Estructura:** título, icono dentro del input, heading RESULTADOS con query, filas con `<img>` real + título/artista, tarjeta llenando la columna B.
+  - **Debounce/estados de búsqueda:** al teclear aparece "Buscando en Spotify..." (capturado a los 100ms) y luego los resultados; query sin matches → "No se encontraron resultados para «zzzznoexiste»".
+  - **4 estados del botón:** default (pill "+ Agregar") → **loading** ("Agregando…" deshabilitado; capturado retrasando el POST /queue 800ms) → **success** (chip verde "✓ Agregada"); **duplicate** con canción ya en cola (chip atenuado "Ya en cola", deshabilitado); **error** con 500 simulado del stub (pill roja "Error al agregar", clicable, y el banner `errorAlert` apareció bajo el header).
+  - **Tema claro:** tarjeta blanca, input `--surface2` claro, textos oscuros.
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.

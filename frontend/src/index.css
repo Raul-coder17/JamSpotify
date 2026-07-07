@@ -1676,3 +1676,179 @@ p {
   max-width: 240px;
   margin: 0;
 }
+
+/* ==========================================================================
+   Fase 4.C — Columna B: buscador.
+   ========================================================================== */
+.rd-search {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.rd-search-head {
+  padding: 20px 20px 14px;
+  flex-shrink: 0;
+}
+.rd-search-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0 0 13px;
+}
+
+.rd-search-input-wrap { position: relative; }
+.rd-search-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text3);
+  display: flex;
+  pointer-events: none;
+}
+.rd-search-input {
+  width: 100%;
+  padding: 13px 15px 13px 44px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.rd-search-input::placeholder { color: var(--text3); }
+.rd-search-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--greenSoft);
+}
+
+.rd-search-heading {
+  padding: 0 20px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text3);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.rd-search-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 14px 16px;
+}
+
+.rd-search-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 9px 8px;
+  border-radius: 13px;
+  animation: jamup 0.3s ease both;
+}
+.rd-search-row:hover { background: var(--surface2); }
+
+.rd-search-art {
+  width: 46px;
+  height: 46px;
+  border-radius: 9px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  display: block;
+}
+.rd-search-info { flex: 1; min-width: 0; }
+.rd-search-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rd-search-artist {
+  font-size: 12.5px;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Botón Agregar — estados default/loading/error (pill outline) */
+.rd-search-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 99px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.rd-search-add:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--greenText);
+}
+.rd-search-add:disabled { opacity: 0.7; cursor: default; }
+.rd-search-add.error {
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #ef4444;
+}
+
+/* Chip — estados success (verde) y duplicate (atenuado) */
+.rd-search-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--greenSoft);
+  border: 1px solid transparent;
+  border-radius: 99px;
+  color: var(--greenText);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
+  cursor: default;
+}
+.rd-search-chip.muted {
+  background: var(--surface2);
+  color: var(--text3);
+}
+.rd-search-chip:disabled { opacity: 1; }
+
+.rd-search-add svg,
+.rd-search-chip svg { width: 14px; height: 14px; }
+
+.rd-search-status {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text3);
+  font-size: 14px;
+}
+
+/* Fallback apilado <1000px: que la lista scrollee dentro de la tarjeta */
+@media (max-width: 999px) {
+  .rd-search { max-height: 70vh; }
+}
