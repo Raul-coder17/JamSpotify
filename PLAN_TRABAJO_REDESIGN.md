@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-**Fase 5 completada** (switch Álbum/Vinilo). Sigue Fase 6 (layout móvil).
+**Fase 6 completada** (layout móvil: tabs + mini-player + hoja expandible). Sigue Fase 7 (limpieza y cierre).
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -20,7 +20,7 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
    - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — ✅ hecho
    - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — ✅ hecho
 5. Switch Álbum/Vinilo — ✅ hecho
-6. Layout móvil (tabs + mini-player) — pendiente
+6. Layout móvil (tabs + mini-player) — ✅ hecho
 7. Limpieza y cierre — pendiente
 
 ## Gaps funcionales a preservar (el mockup no los incluye)
@@ -223,5 +223,37 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
   - **Pausa/reanuda:** al pausar, el disco toma `.paused` y `animationPlayState: paused` (igual que el EQ, `eqPaused: true`); al reanudar vuelve a `running`.
   - **Persistencia:** tras recargar sigue en vinilo (`localStorage`='vinyl', disco girando).
   - **Tema:** en light el orificio usa `--surface` (blanco) y el botón `--surface2` claro; verificado álbum y vinilo en **dark y light** (capturas). El disco negro se lee bien sobre la tarjeta blanca.
+  - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 6 — Decisiones de diseño confirmadas (Raúl)
+1. **Controles del reproductor en móvil:** el mini-player solo lleva carátula + título/artista + play/pause. Seek, volumen y transporte completo (prev/next, ±15s) viven en una **hoja expandible** que se abre al tocar el mini-player (patrón tipo Spotify). Se mantienen **solo 2 tabs** Buscar/Cola como se pidió (no se añade un tercer tab de reproductor).
+2. **Header en móvil:** los botones del host se **compactan a icono** (Restablecer/Desconectar/Invitar/Dispositivo pierden texto y quedan con icono + tooltip); ninguno se elimina.
+
+### Fase 6 — Layout móvil (App.jsx + index.css)
+**Qué cambió:** solo estructura/presentación responsive para `<1000px` (mismo breakpoint del fallback temporal de 4.A, que se **reemplaza**). **Ningún handler, estado de negocio, prop ni lógica tocada.** Único añadido de estado, puramente de presentación (mismo criterio que `showShare` en 4.F y `artStyle` en 5): `mobileTab` (`'search' | 'queue'`, default `'search'`) y `showPlayerSheet` (bool). El desktop (`>1000px`) queda **idéntico** a Fase 5.
+- `App.jsx`:
+  - Iconos nuevos en `Icons`: `Reset`, `LogOut` (para el header icon-only) y `ChevronDown` (cierre de la hoja).
+  - **Barra de pestañas móvil** (`.rd-mtabs`, oculta en desktop) entre el header/alerta y la grid: Buscar / Cola. Alternan `mobileTab`.
+  - Las 3 `<section className="rd-dash-col">` reciben clases distintivas: `rd-col-player` (columna A), `rd-col-search` (B, con `active` si `mobileTab==='search'`), `rd-col-queue` (C, con `active` si `mobileTab==='queue'`). En móvil se muestra **una columna a la vez** a ancho completo; en desktop las 3 en grid (las clases nuevas no tienen efecto).
+  - **Hoja expandible:** la columna A (reproductor completo, tal cual, con seek/transporte/volumen/toggle álbum-vinilo) pasa en móvil a un overlay `position:fixed` a pantalla completa cuando `showPlayerSheet`. Botón `rd-sheet-close` (chevron) para colapsar. Se **reutiliza la misma tarjeta** `.rd-player` — sin duplicar markup ni handlers.
+  - **Mini-reproductor fijo** (`.rd-miniplayer`, oculto en desktop) al pie: carátula + título/artista + play/pause (play solo host, mismo `togglePlay`). Tocar el cuerpo abre la hoja (`setShowPlayerSheet(true)`). Se renderiza solo con `currentlyPlaying`; el shell gana la clase `rd-has-mini` para reservar espacio inferior en la grid.
+  - Header host: etiquetas envueltas en `.rd-hbtn-label` (visibles en desktop) + iconos `.rd-hbtn-ico` (visibles en móvil) para el modo icon-only. Se añadió `title` al botón de dispositivo para conservar nombre accesible al ocultar su texto. Guest (Editar/tag) sin cambios (header menos cargado).
+- `index.css` (aditivo + reemplazo del fallback): bloque **Fase 6** con `.rd-mtabs/.rd-mtab`, `.rd-sheet-close`, `.rd-miniplayer*` (todos `display:none` por defecto → visibles solo dentro del `@media (max-width:999px)`), `.rd-hbtn-ico`. El media query: header con wrap + padding compacto, icon-only (`.rd-hbtn-label`→none, `.rd-hbtn-ico`→inline-flex), tabs y mini-player visibles, grid como **región de scroll** de una sola columna (tarjetas de altura natural: se anularon los caps `max-height:70vh` del fallback de 4.C/4.D), hoja del reproductor como overlay fijo `z-index:120`, y `.rd-dash-shell{height:100dvh}`. Popover de dispositivos: en móvil se **fija al viewport** (`.rd-devices-anchor .rd-devices-pop`, especificidad reforzada) porque anclado a un botón cercano al borde izquierdo un panel de 320px se salía de pantalla. Se bajó el `z-index` del mini-player a 30 para que quede **debajo** de popover (40/41) y modales (55). Fallback temporal de 4.A eliminado.
+
+**Antes/después:**
+- Antes (fallback 4.A): `<1000px` apilaba las 3 columnas con scroll de página.
+- Después: tabs Buscar/Cola (una vista a la vez a ancho completo) + mini-reproductor fijo con hoja expandible; header icon-only sin perder controles.
+
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub en :3000; scratchpad, fuera del repo):
+  - **375×812 y 414×896:** shell y grid a ancho completo real; **tabs alternan** Buscar↔Cola (col B ↔ col C, la inactiva `display:none`); mini-player fijo al pie (ancho completo, sobre el contenido con padding reservado).
+  - **Mini-player play/pause:** el icono conmuta Pause→Play al pausar y el POST de pausa/play se dispara (gap de transporte operativo desde el mini-player).
+  - **Hoja expandible:** tocar el mini-player abre overlay a pantalla completa (`z-index:120`) con la tarjeta **completa**: label+toggle Álbum/Vinilo, carátula+EQ, barra de progreso, transporte de 5 botones (seek ±15s incluidos) y volumen; el chevron la colapsa de vuelta al mini-player.
+  - **Gaps funcionales en móvil:** aprobar invitado (POST `/guest/approve` disparado, tarjeta de aprobaciones visible en tab Cola), buscar + Agregar (chip "Agregada" de éxito), tabs internas Cola/Historial, filas de cola con acción Quitar — todos operativos.
+  - **Overlays angostos:** popover de dispositivos fijado al viewport (12px de inset, sin overflow izq/der a 375 y 414, bajo el header); modal Compartir (335px a 375) sin overflow y dentro de alto.
+  - **Header:** los 5 controles del host presentes como icono + tooltip (Dispositivo, Tema, Restablecer, Desconectar, Invitar), ninguno eliminado.
+  - **Desktop (1340×864) sin cambios:** grid `300px / 624px / 336px`, `.rd-mtabs` y `.rd-miniplayer` en `display:none`, columna del reproductor `position:static` en la grid (no overlay), botones del header con **texto** (`.rd-hbtn-label` visible, `.rd-hbtn-ico` oculto). Idéntico a Fase 5.
   - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
