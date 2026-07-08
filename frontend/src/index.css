@@ -1447,14 +1447,42 @@ p {
   flex: 1 0 auto; /* llena la columna, sin encoger por debajo del contenido */
 }
 
+.rd-player-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
 .rd-player-label {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
   color: var(--text3);
   text-transform: uppercase;
-  margin-bottom: 16px;
-  flex-shrink: 0;
+}
+
+/* Toggle álbum/vinilo (preferencia visual de la carátula) */
+.rd-player-artstyle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.rd-player-artstyle:hover {
+  color: var(--text);
+  border-color: var(--border2);
+  background: var(--surface3);
 }
 
 .rd-player-body {
@@ -1482,6 +1510,57 @@ p {
   object-fit: cover;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
   display: block;
+}
+
+/* Vinilo giratorio (estilo alternativo de carátula, Fase 5) */
+.rd-player-vinyl {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2a2a2e 8%, #0b0b0d 38%, #1a1a1d 66%, #0b0b0d 99%);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45), inset 0 0 12px rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  animation: jamspin 20s linear infinite;
+}
+/* Pausa el giro cuando la reproducción está pausada (igual que el EQ) */
+.rd-player-vinyl.paused {
+  animation-play-state: paused;
+}
+.rd-player-vinyl::before {
+  content: '';
+  position: absolute;
+  width: 94%;
+  height: 94%;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.rd-player-vinyl::after {
+  content: '';
+  position: absolute;
+  width: 78%;
+  height: 78%;
+  border-radius: 50%;
+  border: 2px dashed rgba(0, 0, 0, 0.4);
+}
+.rd-player-vinyl-cover {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  object-fit: cover;
+  z-index: 2;
+  border: 3px solid #0b0b0d;
+}
+.rd-player-vinyl-hole {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  border-radius: 50%;
+  z-index: 3;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 /* Insignia ecualizador flotante (estado sonando/pausado) */

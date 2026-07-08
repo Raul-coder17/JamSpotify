@@ -95,6 +95,18 @@ const Icons = {
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
     </svg>
+  ),
+  Disc: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  ),
+  Album: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
   )
 };
 
@@ -148,6 +160,8 @@ function App() {
 
   // Tema claro/oscuro (Fase 2) — persistido en localStorage, default oscuro
   const [theme, setTheme] = useState(() => localStorage.getItem('jamspotify-theme') || 'dark');
+  // Preferencia visual de la carátula del reproductor: 'album' (cuadrada) | 'vinyl' (disco giratorio)
+  const [artStyle, setArtStyle] = useState(() => localStorage.getItem('jamspotify-art-style') || 'album');
 
   // Ref para barra de progreso
   const progressTimerRef = useRef(null);
@@ -169,6 +183,13 @@ function App() {
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+
+  // Persistir la preferencia de estilo de carátula
+  useEffect(() => {
+    localStorage.setItem('jamspotify-art-style', artStyle);
+  }, [artStyle]);
+
+  const toggleArtStyle = () => setArtStyle(prev => (prev === 'album' ? 'vinyl' : 'album'));
 
   // Helper: construye URLs de sala → /api/rooms/:roomId/<path>
   const r = (path) => `/api/rooms/${roomId}${path}`;
@@ -1252,16 +1273,39 @@ function App() {
 
           {/* Card Reproductor Actual */}
           <div className="rd-player">
-            <span className="rd-player-label">Reproduciendo</span>
+            <div className="rd-player-head">
+              <span className="rd-player-label">Reproduciendo</span>
+              {currentlyPlaying && (
+                <button
+                  onClick={toggleArtStyle}
+                  className="rd-player-artstyle"
+                  title={artStyle === 'album' ? 'Ver como vinilo' : 'Ver como álbum'}
+                >
+                  {artStyle === 'album' ? <Icons.Disc /> : <Icons.Album />}
+                  <span>{artStyle === 'album' ? 'Vinilo' : 'Álbum'}</span>
+                </button>
+              )}
+            </div>
             {currentlyPlaying ? (
               <div className="rd-player-body">
-                {/* Carátula álbum + insignia ecualizador */}
+                {/* Carátula (álbum cuadrado o vinilo giratorio) + insignia ecualizador */}
                 <div className="rd-player-art-wrap">
-                  <img
-                    src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
-                    alt={currentlyPlaying.name}
-                    className="rd-player-art"
-                  />
+                  {artStyle === 'vinyl' ? (
+                    <div className={`rd-player-vinyl ${currentlyPlaying.isPlaying ? '' : 'paused'}`}>
+                      <img
+                        src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
+                        alt={currentlyPlaying.name}
+                        className="rd-player-vinyl-cover"
+                      />
+                      <div className="rd-player-vinyl-hole"></div>
+                    </div>
+                  ) : (
+                    <img
+                      src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
+                      alt={currentlyPlaying.name}
+                      className="rd-player-art"
+                    />
+                  )}
                   <div
                     className={`rd-player-eq ${!currentlyPlaying.isPlaying ? 'paused' : ''}`}
                     title={currentlyPlaying.isPlaying ? 'Sonando' : 'Pausado'}

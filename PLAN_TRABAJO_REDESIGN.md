@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-**Fase 4 completada** (4.A–4.G). Siguen Fase 5 (switch Álbum/Vinilo) y Fase 6 (layout móvil).
+**Fase 5 completada** (switch Álbum/Vinilo). Sigue Fase 6 (layout móvil).
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -19,7 +19,7 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
    - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — ✅ hecho
    - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — ✅ hecho
    - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — ✅ hecho
-5. Switch Álbum/Vinilo — pendiente
+5. Switch Álbum/Vinilo — ✅ hecho
 6. Layout móvil (tabs + mini-player) — pendiente
 7. Limpieza y cierre — pendiente
 
@@ -200,3 +200,28 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
 
 **Con esto la Fase 4 queda completa: dashboard en 3 columnas con todos los gaps funcionales preservados (aprobaciones, reset/desconectar, seek, historial completo, 4 estados de Agregar, drag&drop, permisos por rol y selector de dispositivos rico).**
+
+### Fase 5 — Switch Álbum/Vinilo (App.jsx + index.css)
+**Qué cambió:** se recuperó el vinilo giratorio (retirado en 4.B) como **estilo alternativo** de la carátula, alternable con un toggle propio en la tarjeta del reproductor. **Ningún handler de reproducción, estado de playback ni el resto del reproductor tocado** (progreso, transporte, volumen, seek intactos); único añadido de estado: `artStyle` (`'album' | 'vinyl'`).
+- `App.jsx`:
+  - Estado `artStyle` inicializado desde `localStorage['jamspotify-art-style']`, default `'album'`. `useEffect([artStyle])` que persiste la preferencia. Handler `toggleArtStyle` que alterna album↔vinyl.
+  - Iconos `Disc` (círculo con orificio, vinilo) y `Album` (cuadro con orificio) agregados al objeto `Icons`.
+  - Nueva fila `.rd-player-head` que envuelve el label "REPRODUCIENDO" + botón toggle `.rd-player-artstyle` (solo visible con `currentlyPlaying`; muestra el icono+nombre del **otro** modo, ej. "Vinilo" cuando está en álbum). El botón vive **en la tarjeta del reproductor**, no en el header (es preferencia de la carátula, no de tema).
+  - La carátula (dentro del `.rd-player-art-wrap` de 200×200, compartido) renderiza condicionalmente: `artStyle === 'vinyl'` → disco `.rd-player-vinyl` con la **imagen real de Spotify** al centro (`.rd-player-vinyl-cover`) y el orificio (`.rd-player-vinyl-hole`); si no → la `<img>` cuadrada `.rd-player-art` de la Fase 4.B. La insignia EQ queda **una sola vez** sobre el wrap (sirve a ambos modos).
+  - El disco recibe la clase `paused` cuando `!currentlyPlaying.isPlaying` (mismo patrón que el EQ), pausando el giro.
+- `index.css` (aditivo): `.rd-player-head` (flex, hereda el margin-bottom que tenía el label), `.rd-player-label` (sin margin propio ahora), `.rd-player-artstyle` (pill `--surface2` con hover `--surface3`), y el bloque del vinilo `.rd-player-vinyl` (disco 200px, `animation: jamspin 20s linear infinite` — el keyframe de la Fase 1; `.paused` → `animation-play-state: paused`), `::before`/`::after` (surcos), `.rd-player-vinyl-cover` (carátula circular 82px al centro) y `.rd-player-vinyl-hole` (orificio con `background: var(--surface)`, token de tema). El disco es negro realista (records son negros) pero el orificio y el botón usan tokens `--surface`/`--surface2`, por lo que responden al tema. Las clases viejas del vinilo pre-rediseño (`.vinyl-*`, `.spin-animation`) siguen sin uso (limpieza en Fase 7).
+
+**Antes/después:**
+- Antes (Fase 4): carátula siempre álbum (cuadrada); el vinilo no existía en el dashboard rediseñado.
+- Después: toggle Álbum/Vinilo en la tarjeta del reproductor; en vinilo, disco giratorio con la carátula real al centro que **se detiene en pausa**; la preferencia persiste entre recargas y funciona en dark/light.
+
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub en :3000, host, desktop 1340×864):
+  - **Default:** carga en `album` (`.rd-player-art` presente, toggle muestra "Vinilo"), `localStorage['jamspotify-art-style']` ausente→'album'.
+  - **Toggle a vinilo:** `.rd-player-vinyl` presente, `.rd-player-art` ausente, `.rd-player-vinyl-cover` con la URL real de la carátula (`picsum.../t1/100`), `animationName: jamspin`, `animationPlayState: running`, toggle→"Álbum", `localStorage`→'vinyl'.
+  - **Pausa/reanuda:** al pausar, el disco toma `.paused` y `animationPlayState: paused` (igual que el EQ, `eqPaused: true`); al reanudar vuelve a `running`.
+  - **Persistencia:** tras recargar sigue en vinilo (`localStorage`='vinyl', disco girando).
+  - **Tema:** en light el orificio usa `--surface` (blanco) y el botón `--surface2` claro; verificado álbum y vinilo en **dark y light** (capturas). El disco negro se lee bien sobre la tarjeta blanca.
+  - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
