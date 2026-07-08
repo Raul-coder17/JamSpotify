@@ -95,6 +95,36 @@ const Icons = {
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
     </svg>
+  ),
+  Disc: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  ),
+  Album: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  ),
+  Reset: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1 4 1 10 7 10"></polyline>
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+    </svg>
+  ),
+  LogOut: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+      <polyline points="16 17 21 12 16 7"></polyline>
+      <line x1="21" y1="12" x2="9" y2="12"></line>
+    </svg>
+  ),
+  ChevronDown: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
   )
 };
 
@@ -145,9 +175,13 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [errorAlert, setErrorAlert] = useState(null);
   const [showShare, setShowShare] = useState(false); // Modal Compartir (Fase 4.F)
+  const [mobileTab, setMobileTab] = useState('search'); // Fase 6: pestaña móvil visible 'search' | 'queue'
+  const [showPlayerSheet, setShowPlayerSheet] = useState(false); // Fase 6: hoja expandida del reproductor (móvil)
 
   // Tema claro/oscuro (Fase 2) — persistido en localStorage, default oscuro
   const [theme, setTheme] = useState(() => localStorage.getItem('jamspotify-theme') || 'dark');
+  // Preferencia visual de la carátula del reproductor: 'album' (cuadrada) | 'vinyl' (disco giratorio)
+  const [artStyle, setArtStyle] = useState(() => localStorage.getItem('jamspotify-art-style') || 'album');
 
   // Ref para barra de progreso
   const progressTimerRef = useRef(null);
@@ -169,6 +203,13 @@ function App() {
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+
+  // Persistir la preferencia de estilo de carátula
+  useEffect(() => {
+    localStorage.setItem('jamspotify-art-style', artStyle);
+  }, [artStyle]);
+
+  const toggleArtStyle = () => setArtStyle(prev => (prev === 'album' ? 'vinyl' : 'album'));
 
   // Helper: construye URLs de sala → /api/rooms/:roomId/<path>
   const r = (path) => `/api/rooms/${roomId}${path}`;
@@ -1087,7 +1128,7 @@ function App() {
   }
 
   return (
-    <div className="rd-dash-shell">
+    <div className={`rd-dash-shell ${currentlyPlaying ? 'rd-has-mini' : ''}`}>
       {/* Header */}
       <header className="rd-dash-header">
         <div className="rd-dash-header-left">
@@ -1117,9 +1158,10 @@ function App() {
               <button
                 onClick={() => setShowDeviceSelector(!showDeviceSelector)}
                 className={`rd-dash-hbtn ${activeDevice ? 'active' : ''}`}
+                title={activeDevice ? activeDevice.name : 'Elegir Dispositivo'}
               >
                 <Icons.Device />
-                <span>{activeDevice ? activeDevice.name : 'Elegir Dispositivo'}</span>
+                <span className="rd-hbtn-label">{activeDevice ? activeDevice.name : 'Elegir Dispositivo'}</span>
               </button>
 
               {/* Popover de Dispositivos (Solo Host) */}
@@ -1201,12 +1243,14 @@ function App() {
 
           {appMode === 'host' && (
             <>
-              <button onClick={handleResetJam} className="rd-dash-hbtn rd-dash-hbtn-danger">
-                Restablecer Sala
+              <button onClick={handleResetJam} className="rd-dash-hbtn rd-dash-hbtn-danger" title="Restablecer Sala">
+                <span className="rd-hbtn-ico"><Icons.Reset /></span>
+                <span className="rd-hbtn-label">Restablecer Sala</span>
               </button>
 
-              <button onClick={handleLogout} className="rd-dash-hbtn">
-                Desconectar
+              <button onClick={handleLogout} className="rd-dash-hbtn" title="Desconectar">
+                <span className="rd-hbtn-ico"><Icons.LogOut /></span>
+                <span className="rd-hbtn-label">Desconectar</span>
               </button>
 
               <button
@@ -1215,7 +1259,7 @@ function App() {
                 title="Ver información para invitar"
               >
                 <Icons.Share />
-                Invitar
+                <span className="rd-hbtn-label">Invitar</span>
               </button>
             </>
           )}
@@ -1244,24 +1288,70 @@ function App() {
         </div>
       )}
 
+      {/* Pestañas móviles (Fase 6) — alternan Buscar (col B) / Cola (col C); ocultas en desktop */}
+      <div className="rd-mtabs">
+        <button
+          className={`rd-mtab ${mobileTab === 'search' ? 'active' : ''}`}
+          onClick={() => setMobileTab('search')}
+        >
+          Buscar
+        </button>
+        <button
+          className={`rd-mtab ${mobileTab === 'queue' ? 'active' : ''}`}
+          onClick={() => setMobileTab('queue')}
+        >
+          Cola
+        </button>
+      </div>
+
       {/* Dashboard Principal */}
       <main className="rd-dash-grid">
 
-        {/* COLUMNA A: Reproductor */}
-        <section className="rd-dash-col">
+        {/* COLUMNA A: Reproductor (en móvil = hoja expandida sobre el mini-player) */}
+        <section className={`rd-dash-col rd-col-player ${showPlayerSheet ? 'open' : ''}`}>
+          <button
+            className="rd-sheet-close"
+            onClick={() => setShowPlayerSheet(false)}
+            aria-label="Cerrar reproductor"
+          >
+            <Icons.ChevronDown />
+          </button>
 
           {/* Card Reproductor Actual */}
           <div className="rd-player">
-            <span className="rd-player-label">Reproduciendo</span>
+            <div className="rd-player-head">
+              <span className="rd-player-label">Reproduciendo</span>
+              {currentlyPlaying && (
+                <button
+                  onClick={toggleArtStyle}
+                  className="rd-player-artstyle"
+                  title={artStyle === 'album' ? 'Ver como vinilo' : 'Ver como álbum'}
+                >
+                  {artStyle === 'album' ? <Icons.Disc /> : <Icons.Album />}
+                  <span>{artStyle === 'album' ? 'Vinilo' : 'Álbum'}</span>
+                </button>
+              )}
+            </div>
             {currentlyPlaying ? (
               <div className="rd-player-body">
-                {/* Carátula álbum + insignia ecualizador */}
+                {/* Carátula (álbum cuadrado o vinilo giratorio) + insignia ecualizador */}
                 <div className="rd-player-art-wrap">
-                  <img
-                    src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
-                    alt={currentlyPlaying.name}
-                    className="rd-player-art"
-                  />
+                  {artStyle === 'vinyl' ? (
+                    <div className={`rd-player-vinyl ${currentlyPlaying.isPlaying ? '' : 'paused'}`}>
+                      <img
+                        src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
+                        alt={currentlyPlaying.name}
+                        className="rd-player-vinyl-cover"
+                      />
+                      <div className="rd-player-vinyl-hole"></div>
+                    </div>
+                  ) : (
+                    <img
+                      src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
+                      alt={currentlyPlaying.name}
+                      className="rd-player-art"
+                    />
+                  )}
                   <div
                     className={`rd-player-eq ${!currentlyPlaying.isPlaying ? 'paused' : ''}`}
                     title={currentlyPlaying.isPlaying ? 'Sonando' : 'Pausado'}
@@ -1366,7 +1456,7 @@ function App() {
         </section>
 
         {/* COLUMNA B: Buscador */}
-        <section className="rd-dash-col">
+        <section className={`rd-dash-col rd-col-search ${mobileTab === 'search' ? 'active' : ''}`}>
 
           {/* Panel de Búsqueda (Para invitados y host también) */}
           <div className="rd-search">
@@ -1433,7 +1523,7 @@ function App() {
         </section>
 
         {/* COLUMNA C: Aprobaciones, Compartir y Cola/Historial */}
-        <section className="rd-dash-col">
+        <section className={`rd-dash-col rd-col-queue ${mobileTab === 'queue' ? 'active' : ''}`}>
 
           {/* Solicitudes de Acceso (Solo Host) */}
           {appMode === 'host' && pendingApprovals.length > 0 && (
@@ -1581,6 +1671,37 @@ function App() {
         </section>
 
       </main>
+
+      {/* Mini-reproductor fijo (Fase 6) — solo móvil; abre la hoja expandida al tocar */}
+      {currentlyPlaying && (
+        <div
+          className="rd-miniplayer"
+          onClick={() => setShowPlayerSheet(true)}
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir reproductor"
+        >
+          <img
+            src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'}
+            alt={currentlyPlaying.name}
+            className="rd-miniplayer-art"
+          />
+          <div className="rd-miniplayer-info">
+            <div className="rd-miniplayer-name">{currentlyPlaying.name}</div>
+            <div className="rd-miniplayer-artist">{currentlyPlaying.artists}</div>
+          </div>
+          {appMode === 'host' && (
+            <button
+              className="rd-miniplayer-play"
+              onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+              title="Reproducir / Pausar"
+              aria-label="Reproducir o pausar"
+            >
+              {currentlyPlaying.isPlaying ? <Icons.Pause /> : <Icons.Play />}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Modal Compartir (Solo Host) */}
       {showShare && appMode === 'host' && (

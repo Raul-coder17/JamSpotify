@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-**Fase 4 completada** (4.A–4.G). Siguen Fase 5 (switch Álbum/Vinilo) y Fase 6 (layout móvil).
+**REDISEÑO COMPLETO (Fases 0–7).** Dashboard en 3 columnas (desktop) / tabs + mini-player + hoja expandible (móvil), tema claro/oscuro, switch álbum/vinilo, todos los gaps funcionales preservados, y el CSS/JS del sistema de diseño anterior retirado.
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -19,9 +19,9 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
    - 4.E Tarjeta de aprobaciones restilizada (encima de la cola, col C) — ✅ hecho
    - 4.F Modal Compartir (botón Invitar → modal; URL sigue OCULTA) — ✅ hecho
    - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — ✅ hecho
-5. Switch Álbum/Vinilo — pendiente
-6. Layout móvil (tabs + mini-player) — pendiente
-7. Limpieza y cierre — pendiente
+5. Switch Álbum/Vinilo — ✅ hecho
+6. Layout móvil (tabs + mini-player) — ✅ hecho
+7. Limpieza y cierre — ✅ hecho
 
 ## Gaps funcionales a preservar (el mockup no los incluye)
 - Panel de aprobación de invitados pendientes
@@ -200,3 +200,80 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
 
 **Con esto la Fase 4 queda completa: dashboard en 3 columnas con todos los gaps funcionales preservados (aprobaciones, reset/desconectar, seek, historial completo, 4 estados de Agregar, drag&drop, permisos por rol y selector de dispositivos rico).**
+
+### Fase 5 — Switch Álbum/Vinilo (App.jsx + index.css)
+**Qué cambió:** se recuperó el vinilo giratorio (retirado en 4.B) como **estilo alternativo** de la carátula, alternable con un toggle propio en la tarjeta del reproductor. **Ningún handler de reproducción, estado de playback ni el resto del reproductor tocado** (progreso, transporte, volumen, seek intactos); único añadido de estado: `artStyle` (`'album' | 'vinyl'`).
+- `App.jsx`:
+  - Estado `artStyle` inicializado desde `localStorage['jamspotify-art-style']`, default `'album'`. `useEffect([artStyle])` que persiste la preferencia. Handler `toggleArtStyle` que alterna album↔vinyl.
+  - Iconos `Disc` (círculo con orificio, vinilo) y `Album` (cuadro con orificio) agregados al objeto `Icons`.
+  - Nueva fila `.rd-player-head` que envuelve el label "REPRODUCIENDO" + botón toggle `.rd-player-artstyle` (solo visible con `currentlyPlaying`; muestra el icono+nombre del **otro** modo, ej. "Vinilo" cuando está en álbum). El botón vive **en la tarjeta del reproductor**, no en el header (es preferencia de la carátula, no de tema).
+  - La carátula (dentro del `.rd-player-art-wrap` de 200×200, compartido) renderiza condicionalmente: `artStyle === 'vinyl'` → disco `.rd-player-vinyl` con la **imagen real de Spotify** al centro (`.rd-player-vinyl-cover`) y el orificio (`.rd-player-vinyl-hole`); si no → la `<img>` cuadrada `.rd-player-art` de la Fase 4.B. La insignia EQ queda **una sola vez** sobre el wrap (sirve a ambos modos).
+  - El disco recibe la clase `paused` cuando `!currentlyPlaying.isPlaying` (mismo patrón que el EQ), pausando el giro.
+- `index.css` (aditivo): `.rd-player-head` (flex, hereda el margin-bottom que tenía el label), `.rd-player-label` (sin margin propio ahora), `.rd-player-artstyle` (pill `--surface2` con hover `--surface3`), y el bloque del vinilo `.rd-player-vinyl` (disco 200px, `animation: jamspin 20s linear infinite` — el keyframe de la Fase 1; `.paused` → `animation-play-state: paused`), `::before`/`::after` (surcos), `.rd-player-vinyl-cover` (carátula circular 82px al centro) y `.rd-player-vinyl-hole` (orificio con `background: var(--surface)`, token de tema). El disco es negro realista (records son negros) pero el orificio y el botón usan tokens `--surface`/`--surface2`, por lo que responden al tema. Las clases viejas del vinilo pre-rediseño (`.vinyl-*`, `.spin-animation`) siguen sin uso (limpieza en Fase 7).
+
+**Antes/después:**
+- Antes (Fase 4): carátula siempre álbum (cuadrada); el vinilo no existía en el dashboard rediseñado.
+- Después: toggle Álbum/Vinilo en la tarjeta del reproductor; en vinilo, disco giratorio con la carátula real al centro que **se detiene en pausa**; la preferencia persiste entre recargas y funciona en dark/light.
+
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub en :3000, host, desktop 1340×864):
+  - **Default:** carga en `album` (`.rd-player-art` presente, toggle muestra "Vinilo"), `localStorage['jamspotify-art-style']` ausente→'album'.
+  - **Toggle a vinilo:** `.rd-player-vinyl` presente, `.rd-player-art` ausente, `.rd-player-vinyl-cover` con la URL real de la carátula (`picsum.../t1/100`), `animationName: jamspin`, `animationPlayState: running`, toggle→"Álbum", `localStorage`→'vinyl'.
+  - **Pausa/reanuda:** al pausar, el disco toma `.paused` y `animationPlayState: paused` (igual que el EQ, `eqPaused: true`); al reanudar vuelve a `running`.
+  - **Persistencia:** tras recargar sigue en vinilo (`localStorage`='vinyl', disco girando).
+  - **Tema:** en light el orificio usa `--surface` (blanco) y el botón `--surface2` claro; verificado álbum y vinilo en **dark y light** (capturas). El disco negro se lee bien sobre la tarjeta blanca.
+  - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 6 — Decisiones de diseño confirmadas (Raúl)
+1. **Controles del reproductor en móvil:** el mini-player solo lleva carátula + título/artista + play/pause. Seek, volumen y transporte completo (prev/next, ±15s) viven en una **hoja expandible** que se abre al tocar el mini-player (patrón tipo Spotify). Se mantienen **solo 2 tabs** Buscar/Cola como se pidió (no se añade un tercer tab de reproductor).
+2. **Header en móvil:** los botones del host se **compactan a icono** (Restablecer/Desconectar/Invitar/Dispositivo pierden texto y quedan con icono + tooltip); ninguno se elimina.
+
+### Fase 6 — Layout móvil (App.jsx + index.css)
+**Qué cambió:** solo estructura/presentación responsive para `<1000px` (mismo breakpoint del fallback temporal de 4.A, que se **reemplaza**). **Ningún handler, estado de negocio, prop ni lógica tocada.** Único añadido de estado, puramente de presentación (mismo criterio que `showShare` en 4.F y `artStyle` en 5): `mobileTab` (`'search' | 'queue'`, default `'search'`) y `showPlayerSheet` (bool). El desktop (`>1000px`) queda **idéntico** a Fase 5.
+- `App.jsx`:
+  - Iconos nuevos en `Icons`: `Reset`, `LogOut` (para el header icon-only) y `ChevronDown` (cierre de la hoja).
+  - **Barra de pestañas móvil** (`.rd-mtabs`, oculta en desktop) entre el header/alerta y la grid: Buscar / Cola. Alternan `mobileTab`.
+  - Las 3 `<section className="rd-dash-col">` reciben clases distintivas: `rd-col-player` (columna A), `rd-col-search` (B, con `active` si `mobileTab==='search'`), `rd-col-queue` (C, con `active` si `mobileTab==='queue'`). En móvil se muestra **una columna a la vez** a ancho completo; en desktop las 3 en grid (las clases nuevas no tienen efecto).
+  - **Hoja expandible:** la columna A (reproductor completo, tal cual, con seek/transporte/volumen/toggle álbum-vinilo) pasa en móvil a un overlay `position:fixed` a pantalla completa cuando `showPlayerSheet`. Botón `rd-sheet-close` (chevron) para colapsar. Se **reutiliza la misma tarjeta** `.rd-player` — sin duplicar markup ni handlers.
+  - **Mini-reproductor fijo** (`.rd-miniplayer`, oculto en desktop) al pie: carátula + título/artista + play/pause (play solo host, mismo `togglePlay`). Tocar el cuerpo abre la hoja (`setShowPlayerSheet(true)`). Se renderiza solo con `currentlyPlaying`; el shell gana la clase `rd-has-mini` para reservar espacio inferior en la grid.
+  - Header host: etiquetas envueltas en `.rd-hbtn-label` (visibles en desktop) + iconos `.rd-hbtn-ico` (visibles en móvil) para el modo icon-only. Se añadió `title` al botón de dispositivo para conservar nombre accesible al ocultar su texto. Guest (Editar/tag) sin cambios (header menos cargado).
+- `index.css` (aditivo + reemplazo del fallback): bloque **Fase 6** con `.rd-mtabs/.rd-mtab`, `.rd-sheet-close`, `.rd-miniplayer*` (todos `display:none` por defecto → visibles solo dentro del `@media (max-width:999px)`), `.rd-hbtn-ico`. El media query: header con wrap + padding compacto, icon-only (`.rd-hbtn-label`→none, `.rd-hbtn-ico`→inline-flex), tabs y mini-player visibles, grid como **región de scroll** de una sola columna (tarjetas de altura natural: se anularon los caps `max-height:70vh` del fallback de 4.C/4.D), hoja del reproductor como overlay fijo `z-index:120`, y `.rd-dash-shell{height:100dvh}`. Popover de dispositivos: en móvil se **fija al viewport** (`.rd-devices-anchor .rd-devices-pop`, especificidad reforzada) porque anclado a un botón cercano al borde izquierdo un panel de 320px se salía de pantalla. Se bajó el `z-index` del mini-player a 30 para que quede **debajo** de popover (40/41) y modales (55). Fallback temporal de 4.A eliminado.
+
+**Antes/después:**
+- Antes (fallback 4.A): `<1000px` apilaba las 3 columnas con scroll de página.
+- Después: tabs Buscar/Cola (una vista a la vez a ancho completo) + mini-reproductor fijo con hoja expandible; header icon-only sin perder controles.
+
+**Cómo se validó:**
+- `npm run build` → exitoso. `eslint src/App.jsx` → 16 problemas, **todos preexistentes**, 0 nuevos.
+- Navegador (Vite dev + backend stub en :3000; scratchpad, fuera del repo):
+  - **375×812 y 414×896:** shell y grid a ancho completo real; **tabs alternan** Buscar↔Cola (col B ↔ col C, la inactiva `display:none`); mini-player fijo al pie (ancho completo, sobre el contenido con padding reservado).
+  - **Mini-player play/pause:** el icono conmuta Pause→Play al pausar y el POST de pausa/play se dispara (gap de transporte operativo desde el mini-player).
+  - **Hoja expandible:** tocar el mini-player abre overlay a pantalla completa (`z-index:120`) con la tarjeta **completa**: label+toggle Álbum/Vinilo, carátula+EQ, barra de progreso, transporte de 5 botones (seek ±15s incluidos) y volumen; el chevron la colapsa de vuelta al mini-player.
+  - **Gaps funcionales en móvil:** aprobar invitado (POST `/guest/approve` disparado, tarjeta de aprobaciones visible en tab Cola), buscar + Agregar (chip "Agregada" de éxito), tabs internas Cola/Historial, filas de cola con acción Quitar — todos operativos.
+  - **Overlays angostos:** popover de dispositivos fijado al viewport (12px de inset, sin overflow izq/der a 375 y 414, bajo el header); modal Compartir (335px a 375) sin overflow y dentro de alto.
+  - **Header:** los 5 controles del host presentes como icono + tooltip (Dispositivo, Tema, Restablecer, Desconectar, Invitar), ninguno eliminado.
+  - **Desktop (1340×864) sin cambios:** grid `300px / 624px / 336px`, `.rd-mtabs` y `.rd-miniplayer` en `display:none`, columna del reproductor `position:static` en la grid (no overlay), botones del header con **texto** (`.rd-hbtn-label` visible, `.rd-hbtn-ico` oculto). Idéntico a Fase 5.
+  - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
+**Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 7 — Limpieza y cierre (index.css + App.css)
+**Qué cambió:** solo eliminación de código muerto. **Ningún handler, estado, prop, useEffect ni clase `.rd-*` tocados** — `App.jsx` no se modificó (ya usaba exclusivamente clases `.rd-*` desde la Fase 6; no había ninguna referencia a las clases viejas que se retiran aquí).
+- `frontend/src/index.css`: eliminado íntegramente el sistema de diseño anterior (glassmorphism oscuro pre-rediseño) y su media query responsivo asociado — `.app-container`, `.header`, `.logo`, `.glass-panel`, `.dashboard-grid`, `.search-input-wrapper`/`.input-glow`/`.search-icon-inside`, `.btn-primary`/`.btn-secondary`, `.player-card`/`.vinyl-container`/`.vinyl-disc`/`.vinyl-cover`/`.vinyl-center-hole`, `.spin-animation`/`.spin-paused`, `.playback-controls`/`.btn-icon` (+ `.play-pause`, `.btn-seek`), `.progress-bar-container`/`.progress-track`/`.progress-fill`/`.progress-time`, `.track-list`/`.track-item`/`.track-art`/`.track-info`/`.track-title`/`.track-artist`/`.track-meta`, `.share-section`/`.qr-code-img`/`.share-link-copy`/`.share-link-input`, `.modal-overlay`/`.modal-content`, `.visualizer-*`, `.device-select-list`/`.device-item`/`.device-status-dot`, `.tabs-container`/`.tab-btn`, `.users-online-indicator`/`.online-dot`, `.btn-delete-item`, el drag&drop de `.track-item`, `.volume-control-container`/`.volume-slider`, `.welcome-card`, y los keyframes que solo ellas usaban (`spinRecord`, `bounceBar`, `fadeInDown`, `fadeInUp`, `zoomIn`, `pulseDot`). Cada clase se verificó con grep contra `App.jsx` antes de borrarla (0 referencias). Se conservaron `.added-by-tag`, `.alert-card` y `.alert-warning` (únicas clases del sistema viejo con uso real hoy: tag "Invitado: X" del header y el banner `errorAlert`), incluida su regla responsiva `@media (max-width:768px)`. Un comentario de la Fase 4.A que mencionaba `.glass-panel` (ya inexistente) se corrigió. Un comentario "transitorio" en `.rd-qh` sobre las Fases 4.E/4.F (ya completadas) se retiró por obsoleto. **2594 → 1690 líneas.**
+- `frontend/src/App.css`: era boilerplate de la plantilla Vite (`.counter`, `.hero`, `#center`, `#next-steps`, `#docs`, `#spacer`, `.ticks`) sin ninguna clase compartida con `App.jsx` y **sin ningún `import './App.css'`** en todo `frontend/src` (confirmado por grep) — nunca se sirvió al navegador. Se eliminó el archivo en vez de vaciarlo: un archivo vacío sin import no documenta nada y solo añade ruido.
+**Cómo se validó:**
+- `npm run build` → exitoso (bundle CSS de producción bajó a 26.28 kB / gzip 5.21 kB).
+- `eslint src/App.jsx` → 16 problemas, **los mismos de siempre** (todos preexistentes, ninguno relacionado con CSS), 0 nuevos.
+- Grep de cierre: `grep -oE '^\.[a-zA-Z][a-zA-Z0-9_-]*' index.css` solo devuelve `.added-by-tag`, `.alert-card`, `.alert-warning` y clases `.rd-*`; conteo de `{`/`}` balanceado; sin referencias colgantes a los keyframes/clases retirados.
+- Navegador (Vite dev + backend stub en :3000, host con 2 solicitudes pendientes, cola de 3 y sala "demo"):
+  - **Desktop (1340×864), dark:** grid 3 columnas intacta (reproductor, buscador, aprobaciones+cola/historial), colores de tokens correctos (`--bg` `rgb(10,10,13)`, `--surface` `rgb(20,20,25)`).
+  - **Desktop, light** (toggle de tema): shell y tarjetas conmutan a blancos/claros (`rgb(243,243,240)` / `rgb(255,255,255)`) sin ningún elemento sin estilo.
+  - Popover de dispositivos, modal Compartir y toggle Álbum/Vinilo (vinilo con `animation-name: jamspin`, `running`) verificados en ambos temas — sin depender de ninguna clase retirada.
+  - **Móvil (375×812), dark y light:** tabs Buscar/Cola, mini-reproductor fijo, hoja expandible (`position:fixed`, `z-index:120`) y popover de dispositivos (`position:fixed`, sin overflow) — todos renderizando con las clases `.rd-*` intactas.
+  - Búsqueda + POST `/queue` (caso duplicado, 400 del stub) verificado por red — lógica de `App.jsx` intacta, no tocada por esta fase.
+  - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño y a esta limpieza).
+**Archivos tocados:** `frontend/src/index.css`, `frontend/src/App.css` (eliminado), `PLAN_TRABAJO_REDESIGN.md`.
+
+## Cierre del rediseño (Fases 0–7)
+El dashboard de JamSpotify fue reimplementado en su totalidad sobre el sistema `.rd-*` (tokens de tema en `index.css`, sin dependencias del CSS glassmorphism anterior): pantallas simples, dashboard de 3 columnas con reproductor/buscador/cola-historial/aprobaciones, modal de compartir, popover de dispositivos, switch álbum/vinilo, tema claro/oscuro persistente y layout móvil con tabs + mini-reproductor + hoja expandible. Todos los gaps funcionales listados al inicio de este documento se preservaron sin tocar handlers, estado ni lógica de negocio — el rediseño fue exclusivamente de presentación (JSX de markup + clases CSS). La Fase 7 retiró código muerto entre `index.css` (sistema de diseño anterior, ~900 líneas) y `App.css` (boilerplate de Vite sin usar), dejando el árbol de estilos compuesto únicamente por tokens y clases `.rd-*`, más tres clases heredadas todavía en uso real (`.added-by-tag`, `.alert-card`, `.alert-warning`). Build y lint quedan en el mismo estado que durante todas las fases anteriores (0 problemas nuevos). Pendiente de decisión del usuario: mergear `redesign/ui` a `main` y cerrar la rama.
