@@ -4,7 +4,7 @@
 Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup de Claude Design) en frontend/src/App.jsx e index.css, sin tocar lógica de negocio ni backend.
 
 ## Estado
-**Fase 6 completada** (layout móvil: tabs + mini-player + hoja expandible). Sigue Fase 7 (limpieza y cierre).
+**REDISEÑO COMPLETO (Fases 0–7).** Dashboard en 3 columnas (desktop) / tabs + mini-player + hoja expandible (móvil), tema claro/oscuro, switch álbum/vinilo, todos los gaps funcionales preservados, y el CSS/JS del sistema de diseño anterior retirado.
 
 ## Fases
 0. Checkpoint (rama + commit) — ✅ hecho, commit b98eebf
@@ -21,7 +21,7 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
    - 4.G Popover Dispositivos (conserva Refrescar/WebPlayer/estados) — ✅ hecho
 5. Switch Álbum/Vinilo — ✅ hecho
 6. Layout móvil (tabs + mini-player) — ✅ hecho
-7. Limpieza y cierre — pendiente
+7. Limpieza y cierre — ✅ hecho
 
 ## Gaps funcionales a preservar (el mockup no los incluye)
 - Panel de aprobación de invitados pendientes
@@ -257,3 +257,23 @@ Reimplementar el diseño de `design_handoff_jamspotify_redesign` (spec + mockup 
   - **Desktop (1340×864) sin cambios:** grid `300px / 624px / 336px`, `.rd-mtabs` y `.rd-miniplayer` en `display:none`, columna del reproductor `position:static` en la grid (no overlay), botones del header con **texto** (`.rd-hbtn-label` visible, `.rd-hbtn-ico` oculto). Idéntico a Fase 5.
   - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño).
 **Archivos tocados:** `frontend/src/App.jsx`, `frontend/src/index.css`, `PLAN_TRABAJO_REDESIGN.md`.
+
+### Fase 7 — Limpieza y cierre (index.css + App.css)
+**Qué cambió:** solo eliminación de código muerto. **Ningún handler, estado, prop, useEffect ni clase `.rd-*` tocados** — `App.jsx` no se modificó (ya usaba exclusivamente clases `.rd-*` desde la Fase 6; no había ninguna referencia a las clases viejas que se retiran aquí).
+- `frontend/src/index.css`: eliminado íntegramente el sistema de diseño anterior (glassmorphism oscuro pre-rediseño) y su media query responsivo asociado — `.app-container`, `.header`, `.logo`, `.glass-panel`, `.dashboard-grid`, `.search-input-wrapper`/`.input-glow`/`.search-icon-inside`, `.btn-primary`/`.btn-secondary`, `.player-card`/`.vinyl-container`/`.vinyl-disc`/`.vinyl-cover`/`.vinyl-center-hole`, `.spin-animation`/`.spin-paused`, `.playback-controls`/`.btn-icon` (+ `.play-pause`, `.btn-seek`), `.progress-bar-container`/`.progress-track`/`.progress-fill`/`.progress-time`, `.track-list`/`.track-item`/`.track-art`/`.track-info`/`.track-title`/`.track-artist`/`.track-meta`, `.share-section`/`.qr-code-img`/`.share-link-copy`/`.share-link-input`, `.modal-overlay`/`.modal-content`, `.visualizer-*`, `.device-select-list`/`.device-item`/`.device-status-dot`, `.tabs-container`/`.tab-btn`, `.users-online-indicator`/`.online-dot`, `.btn-delete-item`, el drag&drop de `.track-item`, `.volume-control-container`/`.volume-slider`, `.welcome-card`, y los keyframes que solo ellas usaban (`spinRecord`, `bounceBar`, `fadeInDown`, `fadeInUp`, `zoomIn`, `pulseDot`). Cada clase se verificó con grep contra `App.jsx` antes de borrarla (0 referencias). Se conservaron `.added-by-tag`, `.alert-card` y `.alert-warning` (únicas clases del sistema viejo con uso real hoy: tag "Invitado: X" del header y el banner `errorAlert`), incluida su regla responsiva `@media (max-width:768px)`. Un comentario de la Fase 4.A que mencionaba `.glass-panel` (ya inexistente) se corrigió. Un comentario "transitorio" en `.rd-qh` sobre las Fases 4.E/4.F (ya completadas) se retiró por obsoleto. **2594 → 1690 líneas.**
+- `frontend/src/App.css`: era boilerplate de la plantilla Vite (`.counter`, `.hero`, `#center`, `#next-steps`, `#docs`, `#spacer`, `.ticks`) sin ninguna clase compartida con `App.jsx` y **sin ningún `import './App.css'`** en todo `frontend/src` (confirmado por grep) — nunca se sirvió al navegador. Se eliminó el archivo en vez de vaciarlo: un archivo vacío sin import no documenta nada y solo añade ruido.
+**Cómo se validó:**
+- `npm run build` → exitoso (bundle CSS de producción bajó a 26.28 kB / gzip 5.21 kB).
+- `eslint src/App.jsx` → 16 problemas, **los mismos de siempre** (todos preexistentes, ninguno relacionado con CSS), 0 nuevos.
+- Grep de cierre: `grep -oE '^\.[a-zA-Z][a-zA-Z0-9_-]*' index.css` solo devuelve `.added-by-tag`, `.alert-card`, `.alert-warning` y clases `.rd-*`; conteo de `{`/`}` balanceado; sin referencias colgantes a los keyframes/clases retirados.
+- Navegador (Vite dev + backend stub en :3000, host con 2 solicitudes pendientes, cola de 3 y sala "demo"):
+  - **Desktop (1340×864), dark:** grid 3 columnas intacta (reproductor, buscador, aprobaciones+cola/historial), colores de tokens correctos (`--bg` `rgb(10,10,13)`, `--surface` `rgb(20,20,25)`).
+  - **Desktop, light** (toggle de tema): shell y tarjetas conmutan a blancos/claros (`rgb(243,243,240)` / `rgb(255,255,255)`) sin ningún elemento sin estilo.
+  - Popover de dispositivos, modal Compartir y toggle Álbum/Vinilo (vinilo con `animation-name: jamspin`, `running`) verificados en ambos temas — sin depender de ninguna clase retirada.
+  - **Móvil (375×812), dark y light:** tabs Buscar/Cola, mini-reproductor fijo, hoja expandible (`position:fixed`, `z-index:120`) y popover de dispositivos (`position:fixed`, sin overflow) — todos renderizando con las clases `.rd-*` intactas.
+  - Búsqueda + POST `/queue` (caso duplicado, 400 del stub) verificado por red — lógica de `App.jsx` intacta, no tocada por esta fase.
+  - Errores de consola: solo los del Spotify Web Player SDK con token stub (preexistentes, ajenos al rediseño y a esta limpieza).
+**Archivos tocados:** `frontend/src/index.css`, `frontend/src/App.css` (eliminado), `PLAN_TRABAJO_REDESIGN.md`.
+
+## Cierre del rediseño (Fases 0–7)
+El dashboard de JamSpotify fue reimplementado en su totalidad sobre el sistema `.rd-*` (tokens de tema en `index.css`, sin dependencias del CSS glassmorphism anterior): pantallas simples, dashboard de 3 columnas con reproductor/buscador/cola-historial/aprobaciones, modal de compartir, popover de dispositivos, switch álbum/vinilo, tema claro/oscuro persistente y layout móvil con tabs + mini-reproductor + hoja expandible. Todos los gaps funcionales listados al inicio de este documento se preservaron sin tocar handlers, estado ni lógica de negocio — el rediseño fue exclusivamente de presentación (JSX de markup + clases CSS). La Fase 7 retiró código muerto entre `index.css` (sistema de diseño anterior, ~900 líneas) y `App.css` (boilerplate de Vite sin usar), dejando el árbol de estilos compuesto únicamente por tokens y clases `.rd-*`, más tres clases heredadas todavía en uso real (`.added-by-tag`, `.alert-card`, `.alert-warning`). Build y lint quedan en el mismo estado que durante todas las fases anteriores (0 problemas nuevos). Pendiente de decisión del usuario: mergear `redesign/ui` a `main` y cerrar la rama.
