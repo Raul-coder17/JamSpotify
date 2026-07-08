@@ -84,17 +84,6 @@ const Icons = {
       <line x1="12" y1="5" x2="12" y2="19"></line>
       <line x1="5" y1="12" x2="19" y2="12"></line>
     </svg>
-  ),
-  Sun: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="4"></circle>
-      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-    </svg>
-  ),
-  Moon: () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-    </svg>
   )
 };
 
@@ -144,10 +133,6 @@ function App() {
   // UI Feedback
   const [copied, setCopied] = useState(false);
   const [errorAlert, setErrorAlert] = useState(null);
-  const [showShare, setShowShare] = useState(false); // Modal Compartir (Fase 4.F)
-
-  // Tema claro/oscuro (Fase 2) — persistido en localStorage, default oscuro
-  const [theme, setTheme] = useState(() => localStorage.getItem('jamspotify-theme') || 'dark');
 
   // Ref para barra de progreso
   const progressTimerRef = useRef(null);
@@ -161,14 +146,6 @@ function App() {
 
   // Mantener ref de currentlyPlaying sincronizado para lecturas sin re-render
   useEffect(() => { currentlyPlayingRef.current = currentlyPlaying; }, [currentlyPlaying]);
-
-  // Aplicar y persistir el tema en el elemento raíz del documento (cubre todas las pantallas)
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('jamspotify-theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
 
   // Helper: construye URLs de sala → /api/rooms/:roomId/<path>
   const r = (path) => `/api/rooms/${roomId}${path}`;
@@ -184,20 +161,12 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
 
-    // En desarrollo el OAuth callback devuelve el token del host en el hash de la URL
-    // (#host_token=...), independiente del origen. Respaldo: cookie 'jam_host_token_dev'.
-    let devToken;
-    if (window.location.hash.startsWith('#host_token=')) {
-      devToken = decodeURIComponent(window.location.hash.slice('#host_token='.length));
-      // Limpiar el hash de la URL sin recargar (conserva ?roomId=...)
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    } else {
-      const devCookie = document.cookie.split('; ').find(c => c.startsWith('jam_host_token_dev='));
-      devToken = devCookie ? devCookie.split('=')[1] : null;
-    }
-    if (devToken) {
-      setHostToken(devToken);
-      localStorage.setItem('jam_host_token', devToken);
+    // En desarrollo el OAuth callback setea una cookie temporal 'jam_host_token_dev'
+    const devCookie = document.cookie.split('; ').find(c => c.startsWith('jam_host_token_dev='));
+    const tokenFromCookie = devCookie ? devCookie.split('=')[1] : null;
+    if (tokenFromCookie) {
+      setHostToken(tokenFromCookie);
+      localStorage.setItem('jam_host_token', tokenFromCookie);
       document.cookie = 'jam_host_token_dev=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     }
 
@@ -272,10 +241,7 @@ function App() {
     if (appMode !== 'host' || !isAuthenticated) return;
 
     const fetchPending = () => {
-      // En dev la auth del host va por header X-Host-Token (no hay cookie httpOnly).
-      fetch(r('/guest/pending'), {
-        headers: hostToken ? { 'X-Host-Token': hostToken } : {}
-      })
+      fetch(r('/guest/pending'))
         .then(res => res.json())
         .then(data => setPendingApprovals(data || []))
         .catch(err => console.error('Error al obtener solicitudes pendientes:', err));
@@ -284,7 +250,7 @@ function App() {
     fetchPending();
     const interval = setInterval(fetchPending, 1000);
     return () => clearInterval(interval);
-  }, [appMode, isAuthenticated, hostToken]);
+  }, [appMode, isAuthenticated]);
 
   // Polling de reproducción y cola (cada 2.5 segundos)
   useEffect(() => {
@@ -904,10 +870,7 @@ function App() {
 
   // Cerrar Sesión Spotify
   const handleLogout = () => {
-    fetch(r('/auth/logout'), {
-      method: 'POST',
-      headers: hostToken ? { 'X-Host-Token': hostToken } : {}
-    })
+    fetch(r('/auth/logout'), { method: 'POST' })
       .then(() => {
         localStorage.removeItem('jam_host_token');
         window.location.href = '/';
@@ -950,27 +913,27 @@ function App() {
   // Renderizador: Pantalla de Bienvenida y Elección de Rol
   if (appMode === 'choose') {
     return (
-      <div className="rd-screen">
-        <div className="rd-card" style={{ maxWidth: '452px', padding: '42px 36px' }}>
-          <div className="rd-brand" style={{ fontSize: '28px', marginBottom: '18px' }}>
+      <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div className="glass-panel modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center' }}>
+          <div className="logo" style={{ alignSelf: 'center', fontSize: '2.2rem' }}>
             <Icons.Spotify />
             <span>JamSpotify</span>
           </div>
-          <p style={{ color: 'var(--text2)', fontSize: '15px', lineHeight: 1.6, margin: '0 0 26px' }}>
+          <p style={{ color: 'var(--text-secondary)' }}>
             Comparte la cola de reproducción de Spotify en tu sala o fiesta. Cualquiera puede agregar canciones escaneando un código QR.
           </p>
 
           {urlError === 'not_authorized' && (
-            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.28)', borderRadius: '14px', padding: '16px 18px', textAlign: 'left', marginBottom: '18px' }}>
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '0.75rem', padding: '1rem 1.25rem', textAlign: 'left' }}>
               <p style={{ color: '#f87171', fontWeight: 700, marginBottom: '0.4rem' }}>Acceso no permitido</p>
-              <p style={{ color: 'var(--text2)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.5 }}>
                 Tu cuenta de Spotify no está registrada para usar esta aplicación. Contacta al administrador para que te agregue a la lista de acceso.
               </p>
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <a href="/api/auth/login" className="rd-btn-primary">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            <a href="/api/auth/login" className="btn-primary" style={{ textDecoration: 'none' }}>
               <Icons.Spotify />
               Iniciar como Anfitrión
             </a>
@@ -981,37 +944,16 @@ function App() {
                   setAppMode('guest');
                   if (!guestName) setShowNickModal(true);
                 }}
-                className="rd-btn-secondary"
+                className="btn-secondary"
               >
                 Unirse como Invitado
               </button>
             )}
             {!roomId && (
-              <p style={{ fontSize: '0.8rem', color: 'var(--text3)', textAlign: 'center', marginTop: '0.25rem' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
                 Para unirte como invitado, escanea el código QR del anfitrión.
               </p>
             )}
-          </div>
-
-          <div className="rd-features">
-            <div className="rd-feature">
-              <span className="rd-feature-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
-              </span>
-              <span className="rd-feature-label">Escanea el QR</span>
-            </div>
-            <div className="rd-feature">
-              <span className="rd-feature-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </span>
-              <span className="rd-feature-label">Agrega canciones</span>
-            </div>
-            <div className="rd-feature">
-              <span className="rd-feature-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-              </span>
-              <span className="rd-feature-label">En tiempo real</span>
-            </div>
           </div>
         </div>
       </div>
@@ -1022,22 +964,22 @@ function App() {
   if (appMode === 'guest' && guestName) {
     if (guestApprovalStatus === 'pending' || guestApprovalStatus === 'not_requested' || !guestApprovalStatus) {
       return (
-        <div className="rd-screen">
-          <div className="rd-card" style={{ maxWidth: '420px', padding: '40px 34px' }}>
-            <div className="rd-brand" style={{ fontSize: '20px', marginBottom: '20px' }}>
+        <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
+          <div className="glass-panel modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center', padding: '2.5rem 2rem' }}>
+            <div className="logo" style={{ alignSelf: 'center', fontSize: '2rem' }}>
               <Icons.Spotify />
               <span>JamSpotify</span>
             </div>
 
-            <div className="rd-dots">
-              <span className="rd-dot"></span>
-              <span className="rd-dot" style={{ animationDelay: '0.3s' }}></span>
-              <span className="rd-dot" style={{ animationDelay: '0.6s' }}></span>
+            <div style={{ display: 'flex', justifyContent: 'center', alignSelf: 'center', gap: '6px', margin: '1rem 0' }}>
+              <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite' }}></span>
+              <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite', animationDelay: '0.3s' }}></span>
+              <span className="online-dot" style={{ width: '12px', height: '12px', backgroundColor: 'var(--spotify-green)', animation: 'pulseDot 1.5s infinite', animationDelay: '0.6s' }}></span>
             </div>
 
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '22px', margin: '0 0 12px' }}>Esperando Aprobación</h2>
-            <p style={{ color: 'var(--text2)', fontSize: '14.5px', lineHeight: 1.6, margin: '0 0 26px' }}>
-              Hola <strong style={{ color: 'var(--text)' }}>{guestName}</strong>, tu solicitud de acceso ha sido enviada al anfitrión. Pídele que te acepte para poder ingresar y encolar canciones.
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Esperando Aprobación</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+              Hola <strong>{guestName}</strong>, tu solicitud de acceso ha sido enviada al anfitrión. Pídele que te acepte para poder ingresar y encolar canciones.
             </p>
 
             <button
@@ -1047,7 +989,8 @@ function App() {
                 setGuestApprovalStatus('not_requested');
                 setShowNickModal(true);
               }}
-              className="rd-btn-secondary"
+              className="btn-secondary"
+              style={{ marginTop: '0.5rem' }}
             >
               Cambiar Nombre / Cancelar
             </button>
@@ -1058,15 +1001,15 @@ function App() {
 
     if (guestApprovalStatus === 'rejected') {
       return (
-        <div className="rd-screen">
-          <div className="rd-card" style={{ maxWidth: '420px', padding: '40px 34px', borderColor: 'rgba(239, 68, 68, 0.28)' }}>
-            <div style={{ width: '60px', height: '60px', margin: '0 auto 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239, 68, 68, 0.12)', borderRadius: '50%', color: '#ef4444' }}>
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+        <div className="app-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
+          <div className="glass-panel modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', textAlign: 'center', padding: '2.5rem 2rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+            <div className="logo" style={{ alignSelf: 'center', fontSize: '2rem', color: '#ef4444' }}>
+              <Icons.Spotify />
+              <span>Acceso Denegado</span>
             </div>
 
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '22px', margin: '0 0 12px' }}>Acceso Denegado</h2>
-            <p style={{ color: 'var(--text2)', fontSize: '14.5px', lineHeight: 1.6, margin: '0 0 26px' }}>
-              El anfitrión de la sala ha rechazado tu solicitud de acceso para el nombre <strong style={{ color: 'var(--text)' }}>{guestName}</strong>.
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+              El anfitrión de la sala ha rechazado tu solicitud de acceso para el nombre <strong>{guestName}</strong>.
             </p>
 
             <button
@@ -1076,7 +1019,8 @@ function App() {
                 setGuestApprovalStatus('not_requested');
                 setShowNickModal(true);
               }}
-              className="rd-btn-danger"
+              className="btn-primary"
+              style={{ background: '#ef4444', color: '#fff', boxShadow: 'none' }}
             >
               Intentar con otro nombre
             </button>
@@ -1087,135 +1031,47 @@ function App() {
   }
 
   return (
-    <div className="rd-dash-shell">
+    <div className="app-container">
       {/* Header */}
-      <header className="rd-dash-header">
-        <div className="rd-dash-header-left">
-          <div className="rd-dash-brand" onClick={() => setAppMode('choose')}>
-            <Icons.Spotify />
-            <span>JamSpotify</span>
-          </div>
-          {appMode === 'guest' && (
-            <div className="rd-dash-pill" title={`Sesión de ${serverInfo.hostName || 'Anfitrión'}`}>
-              <span className="rd-dash-dot"></span>
-              <span>Sala de {serverInfo.hostName || 'Anfitrión'}</span>
-            </div>
-          )}
+      <header className="header">
+        <div className="logo" onClick={() => setAppMode('choose')} style={{ cursor: 'pointer' }}>
+          <Icons.Spotify />
+          <span>JamSpotify</span>
+          {appMode === 'guest' && <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>(Sesión de {serverInfo.hostName || 'Anfitrión'})</span>}
         </div>
 
-        <div className="rd-dash-header-right">
-          {/* Usuarios activos en la sala */}
-          {(appMode === 'host' || appMode === 'guest') && connectedUsers.length > 0 && (
-            <div className="rd-dash-pill" title={`Conectados: ${connectedUsers.join(', ')}`}>
-              <span className="rd-dash-dot-online"></span>
-              <span>{connectedUsers.length} en línea</span>
-            </div>
-          )}
+        {/* Usuarios activos en la sala */}
+        {(appMode === 'host' || appMode === 'guest') && connectedUsers.length > 0 && (
+          <div className="users-online-indicator" title={`Conectados: ${connectedUsers.join(', ')}`}>
+            <span className="online-dot"></span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {connectedUsers.length} en línea
+            </span>
+          </div>
+        )}
 
-          {appMode === 'host' && (
-            <div className="rd-devices-anchor">
-              <button
-                onClick={() => setShowDeviceSelector(!showDeviceSelector)}
-                className={`rd-dash-hbtn ${activeDevice ? 'active' : ''}`}
-              >
-                <Icons.Device />
-                <span>{activeDevice ? activeDevice.name : 'Elegir Dispositivo'}</span>
-              </button>
-
-              {/* Popover de Dispositivos (Solo Host) */}
-              {showDeviceSelector && (
-                <>
-                  <div className="rd-devices-backdrop" onClick={() => setShowDeviceSelector(false)}></div>
-                  <div className="rd-devices-pop">
-                    <div className="rd-devices-head">
-                      <span className="rd-devices-label">Dispositivos</span>
-                      <button onClick={refreshDevices} className="rd-devices-refresh">
-                        Refrescar
-                      </button>
-                    </div>
-                    <p className="rd-devices-guide">
-                      Spotify requiere un reproductor activo.
-                      {webPlayerState !== 'ready' && (
-                        <> <strong>Para reproducir en esta PC:</strong> Abre la aplicación de Spotify en tu ordenador, pon una canción y haz clic en "Refrescar" arriba.</>
-                      )}
-                    </p>
-
-                    {/* Reproductor Web (Navegador Actual) */}
-                    {webPlayerState === 'ready' && webPlayerDeviceId && (
-                      <div
-                        onClick={() => transferDevice(webPlayerDeviceId)}
-                        className={`rd-devices-item webplayer ${activeDevice && activeDevice.id === webPlayerDeviceId ? 'active' : ''}`}
-                      >
-                        <div>
-                          <div className="rd-devices-item-name">
-                            <span className="rd-dash-dot-online"></span>
-                            Este Navegador (PC Actual)
-                          </div>
-                          <div className="rd-devices-item-type">JamSpotify Web Player</div>
-                        </div>
-                        {activeDevice && activeDevice.id === webPlayerDeviceId && <span className="rd-devices-dot"></span>}
-                      </div>
-                    )}
-
-                    {webPlayerState === 'connecting' && (
-                      <div className="rd-devices-status">
-                        Iniciando reproductor en el navegador...
-                      </div>
-                    )}
-
-                    {devices.filter(d => d.id !== webPlayerDeviceId).length === 0 && webPlayerState !== 'ready' ? (
-                      <div className="rd-devices-status">
-                        No se encontraron otros dispositivos activos. Haz clic en Refrescar.
-                      </div>
-                    ) : (
-                      devices
-                        .filter(device => device.id !== webPlayerDeviceId)
-                        .map(device => (
-                          <div
-                            key={device.id}
-                            onClick={() => transferDevice(device.id)}
-                            className={`rd-devices-item ${device.is_active ? 'active' : ''}`}
-                          >
-                            <div>
-                              <div className="rd-devices-item-name">{device.name}</div>
-                              <div className="rd-devices-item-type">{device.type}</div>
-                            </div>
-                            {device.is_active && <span className="rd-devices-dot"></span>}
-                          </div>
-                        ))
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          <button
-            onClick={toggleTheme}
-            className="rd-dash-hbtn rd-dash-hbtn-icon"
-            title={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-            aria-label="Cambiar tema"
-          >
-            {theme === 'dark' ? <Icons.Sun /> : <Icons.Moon />}
-          </button>
-
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           {appMode === 'host' && (
             <>
-              <button onClick={handleResetJam} className="rd-dash-hbtn rd-dash-hbtn-danger">
+              <button
+                onClick={() => setShowDeviceSelector(!showDeviceSelector)}
+                className={`btn-secondary ${activeDevice ? 'active' : ''}`}
+                style={{ padding: '0.5rem 0.75rem', gap: '0.4rem', fontSize: '0.85rem' }}
+              >
+                <Icons.Device />
+                {activeDevice ? activeDevice.name : 'Elegir Dispositivo'}
+              </button>
+
+              <button
+                onClick={handleResetJam}
+                className="btn-secondary"
+                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#ff4d4d', borderColor: 'rgba(255, 77, 77, 0.2)' }}
+              >
                 Restablecer Sala
               </button>
 
-              <button onClick={handleLogout} className="rd-dash-hbtn">
+              <button onClick={handleLogout} className="btn-secondary" style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
                 Desconectar
-              </button>
-
-              <button
-                onClick={() => setShowShare(true)}
-                className="rd-dash-invite"
-                title="Ver información para invitar"
-              >
-                <Icons.Share />
-                Invitar
               </button>
             </>
           )}
@@ -1228,7 +1084,8 @@ function App() {
                   setNickInput(guestName);
                   setShowNickModal(true);
                 }}
-                className="rd-dash-hbtn"
+                className="btn-secondary"
+                style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
               >
                 Editar
               </button>
@@ -1239,53 +1096,136 @@ function App() {
 
       {/* Alertas */}
       {errorAlert && (
-        <div className="alert-card alert-warning rd-dash-alert">
+        <div className="alert-card alert-warning">
           <span style={{ fontWeight: 'bold' }}>Nota:</span> {errorAlert}
         </div>
       )}
 
-      {/* Dashboard Principal */}
-      <main className="rd-dash-grid">
+      {/* Selector de Dispositivos (Solo Host) */}
+      {showDeviceSelector && appMode === 'host' && (
+        <div className="glass-panel" style={{ marginBottom: '1.5rem', animation: 'fadeInUp 0.3s ease' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Dispositivos Disponibles</h3>
+            <button onClick={refreshDevices} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>
+              Refrescar
+            </button>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            Spotify requiere un reproductor activo.
+            {webPlayerState !== 'ready' && (
+              <> <strong>Para reproducir en esta PC:</strong> Abre la aplicación de Spotify en tu ordenador, pon una canción y haz clic en "Refrescar" arriba.</>
+            )}
+          </p>
+          <div className="device-select-list">
+            {/* Reproductor Web (Navegador Actual) */}
+            {webPlayerState === 'ready' && webPlayerDeviceId && (
+              <div
+                onClick={() => transferDevice(webPlayerDeviceId)}
+                className={`device-item ${activeDevice && activeDevice.id === webPlayerDeviceId ? 'active' : ''}`}
+                style={{
+                  border: '1px solid var(--spotify-green)',
+                  background: 'rgba(29, 185, 84, 0.05)',
+                  marginBottom: '0.75rem'
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--spotify-green)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span className="online-dot" style={{ position: 'relative', width: '6px', height: '6px' }}></span>
+                    Este Navegador (PC Actual)
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>JamSpotify Web Player</div>
+                </div>
+                <div className="device-status-dot"></div>
+              </div>
+            )}
 
-        {/* COLUMNA A: Reproductor */}
-        <section className="rd-dash-col">
+            {webPlayerState === 'connecting' && (
+              <div style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                Iniciando reproductor en el navegador...
+              </div>
+            )}
+
+            {devices.filter(d => d.id !== webPlayerDeviceId).length === 0 && webPlayerState !== 'ready' ? (
+              <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                No se encontraron otros dispositivos activos. Haz clic en Refrescar.
+              </div>
+            ) : (
+              devices
+                .filter(device => device.id !== webPlayerDeviceId)
+                .map(device => (
+                  <div
+                    key={device.id}
+                    onClick={() => transferDevice(device.id)}
+                    className={`device-item ${device.is_active ? 'active' : ''}`}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{device.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{device.type}</div>
+                    </div>
+                    <div className="device-status-dot"></div>
+                  </div>
+                ))
+            )}
+          </div>
+          <button onClick={() => setShowDeviceSelector(false)} className="btn-secondary" style={{ width: '100%', marginTop: '0.75rem' }}>
+            Cerrar
+          </button>
+        </div>
+      )}
+
+      {/* Dashboard Principal */}
+      <main className="dashboard-grid">
+
+        {/* LADO IZQUIERDO: Reproductor y Buscador */}
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
 
           {/* Card Reproductor Actual */}
-          <div className="rd-player">
-            <span className="rd-player-label">Reproduciendo</span>
+          <div className="glass-panel player-card">
             {currentlyPlaying ? (
-              <div className="rd-player-body">
-                {/* Carátula álbum + insignia ecualizador */}
-                <div className="rd-player-art-wrap">
-                  <img
-                    src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
-                    alt={currentlyPlaying.name}
-                    className="rd-player-art"
-                  />
-                  <div
-                    className={`rd-player-eq ${!currentlyPlaying.isPlaying ? 'paused' : ''}`}
-                    title={currentlyPlaying.isPlaying ? 'Sonando' : 'Pausado'}
-                  >
-                    <span className="rd-player-eq-bar"></span>
-                    <span className="rd-player-eq-bar"></span>
-                    <span className="rd-player-eq-bar"></span>
-                    <span className="rd-player-eq-bar"></span>
+              <>
+                {/* Visualizador Flotante */}
+                <div style={{ position: 'absolute', top: '1.25rem', right: '1.5rem', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {currentlyPlaying.isPlaying ? 'Sonando' : 'Pausado'}
+                  </span>
+                  <div className={`visualizer-container ${!currentlyPlaying.isPlaying ? 'visualizer-paused' : ''}`}>
+                    <div className="visualizer-bar"></div>
+                    <div className="visualizer-bar"></div>
+                    <div className="visualizer-bar"></div>
+                    <div className="visualizer-bar"></div>
+                    <div className="visualizer-bar"></div>
+                  </div>
+                </div>
+
+                {/* Vinilo */}
+                <div className="vinyl-container">
+                  <div className={`vinyl-disc ${currentlyPlaying.isPlaying ? 'spin-animation' : 'spin-animation spin-paused'}`}>
+                    <img
+                      src={currentlyPlaying.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150'}
+                      alt={currentlyPlaying.name}
+                      className="vinyl-cover"
+                    />
+                    <div className="vinyl-center-hole"></div>
                   </div>
                 </div>
 
                 {/* Información de Canción */}
-                <div className="rd-player-title">{currentlyPlaying.name}</div>
-                <div className="rd-player-artist">{currentlyPlaying.artists}</div>
+                <h2 style={{ fontSize: '1.6rem', marginBottom: '0.3rem', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {currentlyPlaying.name}
+                </h2>
+                <p style={{ color: 'var(--spotify-green)', fontWeight: 500, marginBottom: '1.5rem', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {currentlyPlaying.artists}
+                </p>
 
                 {/* Barra de progreso */}
-                <div className="rd-player-progress">
+                <div className="progress-bar-container">
                   <div
-                    className={`rd-player-track ${appMode === 'host' ? 'clickable' : ''}`}
+                    className={`progress-track ${appMode === 'host' ? 'clickable' : ''}`}
                     onClick={appMode === 'host' ? seekAbsolute : undefined}
                   >
-                    <div className="rd-player-fill" style={{ width: `${progressPercent}%` }}></div>
+                    <div className="progress-fill" style={{ width: `${progressPercent}%` }}></div>
                   </div>
-                  <div className="rd-player-times">
+                  <div className="progress-time">
                     <span>{formatTime(currentlyPlaying.progressMs)}</span>
                     <span>{formatTime(currentlyPlaying.durationMs)}</span>
                   </div>
@@ -1294,30 +1234,31 @@ function App() {
                 {/* Controles del Anfitrión */}
                 {appMode === 'host' && (
                   <>
-                    <div className="rd-player-transport">
-                      <button onClick={skipPrevious} className="rd-player-btn" title="Anterior">
+                    <div className="playback-controls">
+                      <button onClick={skipPrevious} className="btn-icon" title="Anterior">
                         <Icons.Prev />
                       </button>
-                      <button onClick={() => seekRelative(-15)} className="rd-player-btn rd-player-btn-seek" title="Retroceder 15s">
+                      <button onClick={() => seekRelative(-15)} className="btn-icon btn-seek" title="Retroceder 15s">
                         -15s
                       </button>
-                      <button onClick={togglePlay} className="rd-player-play" title="Reproducir / Pausar">
+                      <button onClick={togglePlay} className="btn-icon play-pause">
                         {currentlyPlaying.isPlaying ? <Icons.Pause /> : <Icons.Play />}
                       </button>
-                      <button onClick={() => seekRelative(15)} className="rd-player-btn rd-player-btn-seek" title="Avanzar 15s">
+                      <button onClick={() => seekRelative(15)} className="btn-icon btn-seek" title="Avanzar 15s">
                         +15s
                       </button>
-                      <button onClick={skipNext} className="rd-player-btn" title="Siguiente">
+                      <button onClick={skipNext} className="btn-icon" title="Siguiente">
                         <Icons.Skip />
                       </button>
                     </div>
 
                     {/* Control de Volumen (Solo Host) */}
-                    <div className="rd-player-volume">
+                    <div className="volume-control-container">
                       <button
                         onClick={toggleMute}
-                        className="rd-player-mute"
+                        className="btn-icon"
                         title={isMuted ? 'Quitar Silencio' : 'Silenciar'}
+                        style={{ padding: '0.2rem', color: 'var(--text-secondary)' }}
                       >
                         {isMuted || (localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)) === 0 ? (
                           <Icons.VolumeMuted />
@@ -1331,31 +1272,29 @@ function App() {
                         max="100"
                         value={localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}
                         onChange={handleVolumeChange}
-                        className="rd-player-volrange"
+                        className="volume-slider"
                         title={`Volumen: ${localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}%`}
                       />
-                      <span className="rd-player-vol-label">
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', minWidth: '32px', textAlign: 'right' }}>
                         {localVolume !== null ? localVolume : (activeDevice?.volume_percent ?? 50)}%
                       </span>
                     </div>
                   </>
                 )}
-              </div>
+              </>
             ) : (
-              <div className="rd-player-body rd-player-empty">
-                <div className="rd-player-empty-art">
-                  <Icons.Spotify />
+              <div style={{ padding: '3rem 1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+                <div className="vinyl-container">
+                  <div className="vinyl-disc">
+                    <div className="vinyl-center-hole"></div>
+                  </div>
                 </div>
-                <h3 className="rd-player-empty-title">Sin reproducción activa</h3>
-                <p className="rd-player-empty-text">
+                <h3>Sin reproducción activa</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '320px' }}>
                   El Host debe abrir Spotify en cualquier dispositivo y reproducir música para iniciar la sesión.
                 </p>
                 {appMode === 'host' && (
-                  <button
-                    onClick={() => setShowDeviceSelector(true)}
-                    className="rd-btn-primary"
-                    style={{ width: 'auto', padding: '12px 18px', fontSize: '14px' }}
-                  >
+                  <button onClick={() => setShowDeviceSelector(true)} className="btn-primary" style={{ marginTop: '0.5rem' }}>
                     <Icons.Device /> Seleccionar Reproductor
                   </button>
                 )}
@@ -1363,61 +1302,56 @@ function App() {
             )}
           </div>
 
-        </section>
-
-        {/* COLUMNA B: Buscador */}
-        <section className="rd-dash-col">
-
           {/* Panel de Búsqueda (Para invitados y host también) */}
-          <div className="rd-search">
-            <div className="rd-search-head">
-              <h2 className="rd-search-title">Buscar y proponer canción</h2>
-              <div className="rd-search-input-wrap">
-                <span className="rd-search-icon"><Icons.Search /></span>
-                <input
-                  type="text"
-                  placeholder="Busca por canción, artista..."
-                  className="rd-search-input"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+          <div className="glass-panel">
+            <h2 style={{ fontSize: '1.3rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              Buscar y Proponer Canción
+            </h2>
+
+            <div className="search-input-wrapper">
+              <input
+                type="text"
+                placeholder="Busca por canción, artista..."
+                className="input-glow"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <span className="search-icon-inside"><Icons.Search /></span>
             </div>
 
-            {searchQuery.trim() !== '' && (
-              <div className="rd-search-heading">Resultados</div>
-            )}
-
             {isSearching && (
-              <div className="rd-search-status">Buscando en Spotify...</div>
+              <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>
+                Buscando en Spotify...
+              </div>
             )}
 
             {!isSearching && searchResults.length > 0 && (
-              <div className="rd-search-list">
+              <div className="track-list" style={{ maxHeight: '350px', overflowY: 'auto', paddingRight: '0.25rem' }}>
                 {searchResults.map(track => {
                   const status = queueStatus[track.id];
                   return (
-                    <div key={track.id} className="rd-search-row">
-                      <img src={track.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={track.name} className="rd-search-art" />
-                      <div className="rd-search-info">
-                        <div className="rd-search-name">{track.name}</div>
-                        <div className="rd-search-artist">{track.artists}</div>
+                    <div key={track.id} className="track-item">
+                      <img src={track.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={track.name} className="track-art" />
+                      <div className="track-info">
+                        <div className="track-title">{track.name}</div>
+                        <div className="track-artist">{track.artists}</div>
                       </div>
 
                       <button
                         onClick={() => addToQueue(track)}
-                        className={
-                          status === 'success' ? 'rd-search-chip' :
-                          status === 'duplicate' ? 'rd-search-chip muted' :
-                          status === 'error' ? 'rd-search-add error' :
-                          'rd-search-add'
-                        }
+                        className="btn-secondary"
                         disabled={status === 'loading' || status === 'duplicate'}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          fontSize: '0.8rem',
+                          borderColor: status === 'success' ? 'var(--spotify-green)' : status === 'duplicate' ? 'var(--text-secondary)' : 'var(--border-glass)',
+                          color: status === 'success' ? 'var(--spotify-green)' : status === 'duplicate' ? 'var(--text-secondary)' : 'var(--text-primary)'
+                        }}
                       >
                         {status === 'loading' ? 'Agregando...' :
                           status === 'success' ? <><Icons.Check /> Agregada</> :
                           status === 'duplicate' ? 'Ya en cola' :
-                          status === 'error' ? 'Error al agregar' : <><Icons.Plus /> Agregar</>}
+                          status === 'error' ? 'Error al agregar' : 'Agregar'}
                       </button>
                     </div>
                   );
@@ -1426,39 +1360,43 @@ function App() {
             )}
 
             {searchQuery && !isSearching && searchResults.length === 0 && (
-              <div className="rd-search-status">No se encontraron resultados para "{searchQuery}"</div>
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                No se encontraron resultados para "{searchQuery}"
+              </div>
             )}
           </div>
 
         </section>
 
-        {/* COLUMNA C: Aprobaciones, Compartir y Cola/Historial */}
-        <section className="rd-dash-col">
+        {/* LADO DERECHO: Cola compartida e Información de Compartir */}
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
 
           {/* Solicitudes de Acceso (Solo Host) */}
           {appMode === 'host' && pendingApprovals.length > 0 && (
-            <div className="rd-approvals">
-              <h2 className="rd-approvals-title">
-                <span className="rd-approvals-dot"></span>
+            <div className="glass-panel" style={{ border: '1px solid rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.05)', animation: 'fadeInUp 0.3s ease' }}>
+              <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="online-dot" style={{ backgroundColor: '#a855f7', boxShadow: '0 0 8px #a855f7' }}></span>
                 Solicitudes de Acceso ({pendingApprovals.length})
               </h2>
-              <p className="rd-approvals-sub">
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
                 Nuevos invitados quieren unirse a tu sala de JamSpotify.
               </p>
-              <div className="rd-approvals-list">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {pendingApprovals.map(req => (
-                  <div key={req.name} className="rd-approvals-row">
-                    <span className="rd-approvals-name">{req.name}</span>
-                    <div className="rd-approvals-actions">
+                  <div key={req.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '0.5rem', border: '1px solid var(--border-glass)' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff' }}>{req.name}</span>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button
                         onClick={() => handleApproveGuest(req.name, 'approve')}
-                        className="rd-approvals-accept"
+                        className="btn-primary"
+                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: '0.5rem' }}
                       >
                         Aceptar
                       </button>
                       <button
                         onClick={() => handleApproveGuest(req.name, 'reject')}
-                        className="rd-approvals-reject"
+                        className="btn-secondary"
+                        style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: '0.5rem', borderColor: '#ef4444', color: '#ef4444' }}
                       >
                         Rechazar
                       </button>
@@ -1469,108 +1407,178 @@ function App() {
             </div>
           )}
 
+          {/* Información de Compartir (Solo Host) */}
+          {appMode === 'host' && (
+            <div className="glass-panel" style={{ border: '1px solid rgba(29, 185, 84, 0.15)' }}>
+              <h2 style={{ fontSize: '1.3rem', marginBottom: '0.5rem', color: 'var(--spotify-green)' }}>
+                ¡Invita a la gente!
+              </h2>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Cualquiera en tu red Wi-Fi puede escanear el código y agregar canciones a la cola en tiempo real.
+              </p>
+
+              <div className="share-section">
+                {serverInfo.joinUrl ? (
+                  <>
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(serverInfo.joinUrl)}`}
+                      alt="Código QR de JamSpotify"
+                      className="qr-code-img"
+                    />
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--spotify-green)', marginBottom: '0.5rem' }}>
+                      Escanea para Unirte
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ padding: '2rem 0', color: 'var(--text-muted)' }}>
+                    Cargando información de red...
+                  </div>
+                )}
+
+                <div className="share-link-copy">
+                  <input
+                    type="text"
+                    readOnly
+                    value="Enlace de Invitación (Oculto por seguridad)"
+                    className="share-link-input"
+                    style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}
+                  />
+                  <button
+                    onClick={copyLink}
+                    className="btn-secondary"
+                    style={{ padding: '0.5rem 0.75rem', display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}
+                    title="Copiar enlace"
+                  >
+                    {copied ? <><Icons.Check /> Copiado</> : <><Icons.Copy /> Copiar Enlace</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Cola de Reproducción Compartida e Historial (Pestañas) */}
-          <div className="rd-qh">
-            <div className="rd-qh-tabs">
+          <div className="glass-panel" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+            <div className="tabs-container">
               <button
-                className={`rd-qh-tab ${sidebarTab === 'queue' ? 'active' : ''}`}
+                className={`tab-btn ${sidebarTab === 'queue' ? 'active' : ''}`}
                 onClick={() => setSidebarTab('queue')}
               >
-                Cola · {queue.length}
+                Cola ({queue.length})
               </button>
               <button
-                className={`rd-qh-tab ${sidebarTab === 'history' ? 'active' : ''}`}
+                className={`tab-btn ${sidebarTab === 'history' ? 'active' : ''}`}
                 onClick={() => setSidebarTab('history')}
               >
-                Historial · {history.length}
+                Historial ({history.length})
               </button>
             </div>
 
             {sidebarTab === 'queue' ? (
-              <div className="rd-qh-list">
+              <div className="track-list" style={{ maxHeight: '450px', overflowY: 'auto' }}>
                 {queue.length === 0 ? (
-                  <div className="rd-qh-empty">
-                    La cola está vacía.<br />¡Busca una canción y agrégala!
+                  <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    La cola está vacía. ¡Busca una canción y agrégala!
                   </div>
                 ) : (
                   queue.map((item, index) => (
                     <div
                       key={item.id}
-                      className={`rd-qh-row ${draggedIndex === index ? 'dragging' : ''}`}
+                      className={`track-item ${draggedIndex === index ? 'dragging' : ''}`}
                       style={{ animationDelay: `${index * 0.05}s` }}
                       draggable={appMode === 'host'}
                       onDragStart={(e) => handleDragStart(e, index)}
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragEnd={handleDragEnd}
                     >
-                      <span className="rd-qh-index">{index + 1}</span>
-                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="rd-qh-art" />
-                      <div className="rd-qh-info">
-                        <div className="rd-qh-name">{item.name}</div>
-                        <div className="rd-qh-sub">
-                          <span className="rd-qh-chip">{item.addedBy}</span>
-                          <span className="rd-qh-artist">{item.artists}</span>
-                        </div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', width: '20px', textAlign: 'center', fontWeight: 600 }}>
+                        {index + 1}
+                      </span>
+                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="track-art" />
+                      <div className="track-info">
+                        <div className="track-title">{item.name}</div>
+                        <div className="track-artist">{item.artists}</div>
                       </div>
-                      {(appMode === 'host' || item.addedBy === guestName) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeFromQueue(item.id);
-                          }}
-                          className="rd-qh-action danger"
-                          title="Eliminar de la cola"
-                        >
-                          <Icons.Trash />
-                        </button>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span className="added-by-tag">{item.addedBy}</span>
+                        {(appMode === 'host' || item.addedBy === guestName) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFromQueue(item.id);
+                            }}
+                            className="btn-delete-item"
+                            title="Eliminar de la cola"
+                          >
+                            <Icons.Trash />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
               </div>
             ) : (
-              <div className="rd-qh-list">
+              <div className="track-list" style={{ maxHeight: '450px', overflowY: 'auto' }}>
                 {history.length === 0 ? (
-                  <div className="rd-qh-empty">
+                  <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                     Aún no se han reproducido canciones en esta sesión.
                   </div>
                 ) : (
                   history.map((item, index) => (
-                    <div key={item.id} className="rd-qh-row" style={{ animationDelay: `${index * 0.05}s` }}>
-                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="rd-qh-art faded" />
-                      <div className="rd-qh-info">
-                        <div className="rd-qh-name">{item.name}</div>
-                        <div className="rd-qh-sub">
-                          <span className="rd-qh-chip">{item.addedBy}</span>
-                          <span className="rd-qh-artist">{item.artists} · {formatPlayedAt(item.playedAt)}</span>
+                    <div key={item.id} className="track-item" style={{ animationDelay: `${index * 0.05}s` }}>
+                      <img src={item.albumArt || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=50'} alt={item.name} className="track-art" />
+                      <div className="track-info">
+                        <div className="track-title">{item.name}</div>
+                        <div className="track-artist">{item.artists}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+                          <span className="added-by-tag">{item.addedBy}</span>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                            {formatPlayedAt(item.playedAt)}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.25rem' }}>
+                          {appMode === 'host' && (
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }}
+                                className="btn-icon"
+                                style={{ padding: '0.35rem', color: 'var(--spotify-green)', background: 'rgba(29, 185, 84, 0.1)', borderRadius: '50%' }}
+                                title="Reproducir ahora"
+                              >
+                                <Icons.Play style={{ width: '12px', height: '12px' }} />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); removeFromHistory(item.id); }}
+                                className="btn-icon"
+                                style={{ padding: '0.35rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderRadius: '50%' }}
+                                title="Eliminar del historial"
+                              >
+                                <Icons.Trash style={{ width: '12px', height: '12px' }} />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); addToQueue(item); }}
+                            className="btn-icon"
+                            style={{
+                              padding: '0.35rem',
+                              color: queueStatus[item.id || item.uri] === 'success' ? '#1db954' : 'var(--text-secondary)',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              borderRadius: '50%'
+                            }}
+                            title="Añadir de nuevo a la cola"
+                            disabled={queueStatus[item.id || item.uri] === 'loading'}
+                          >
+                            {queueStatus[item.id || item.uri] === 'success' ? (
+                              <Icons.Check style={{ width: '12px', height: '12px' }} />
+                            ) : (
+                              <Icons.Plus style={{ width: '12px', height: '12px' }} />
+                            )}
+                          </button>
                         </div>
                       </div>
-                      {appMode === 'host' && (
-                        <>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); playTrackImmediately(item); }}
-                            className="rd-qh-action"
-                            title="Reproducir ahora"
-                          >
-                            <Icons.Play />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); removeFromHistory(item.id); }}
-                            className="rd-qh-action danger"
-                            title="Eliminar del historial"
-                          >
-                            <Icons.Trash />
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); addToQueue(item); }}
-                        className={`rd-qh-action ${queueStatus[item.id || item.uri] === 'success' ? 'success' : ''}`}
-                        title="Añadir de nuevo a la cola"
-                        disabled={queueStatus[item.id || item.uri] === 'loading'}
-                      >
-                        {queueStatus[item.id || item.uri] === 'success' ? <Icons.Check /> : <Icons.Plus />}
-                      </button>
                     </div>
                   ))
                 )}
@@ -1582,53 +1590,16 @@ function App() {
 
       </main>
 
-      {/* Modal Compartir (Solo Host) */}
-      {showShare && appMode === 'host' && (
-        <div className="rd-modal-overlay" onClick={() => setShowShare(false)}>
-          <div className="rd-share-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="rd-share-head">
-              <h2 className="rd-share-title">¡Invita a la gente!</h2>
-              <button onClick={() => setShowShare(false)} className="rd-share-close" title="Cerrar" aria-label="Cerrar">
-                ✕
-              </button>
-            </div>
-            <p className="rd-share-text">
-              Cualquiera en tu red Wi-Fi puede escanear el código y agregar canciones a la cola en tiempo real.
-            </p>
-
-            {serverInfo.joinUrl ? (
-              <div className="rd-share-qr-wrap">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(serverInfo.joinUrl)}`}
-                  alt="Código QR de JamSpotify"
-                  className="rd-share-qr"
-                />
-                <span className="rd-share-qr-label">Escanea para Unirte</span>
-              </div>
-            ) : (
-              <div className="rd-share-loading">Cargando información de red...</div>
-            )}
-
-            <div className="rd-share-row">
-              <div className="rd-share-url">Enlace de Invitación (Oculto por seguridad)</div>
-              <button onClick={copyLink} className="rd-share-copy" title="Copiar enlace">
-                {copied ? <><Icons.Check /> ¡Copiado!</> : <><Icons.Copy /> Copiar</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modal para configurar Nickname */}
       {showNickModal && (
-        <div className="rd-modal-overlay">
-          <div className="rd-card" style={{ maxWidth: '420px', padding: '28px', textAlign: 'left', borderRadius: '22px' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '21px', margin: '0 0 8px' }}>¿Cómo te llamas?</h2>
-            <p style={{ color: 'var(--text2)', fontSize: '13.5px', lineHeight: 1.55, margin: '0 0 20px' }}>
+        <div className="modal-overlay">
+          <div className="glass-panel modal-content">
+            <h2 style={{ marginBottom: '0.75rem', fontSize: '1.4rem' }}>¿Cómo te llamas?</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
               Ingresa un apodo para que todos en la sala sepan quién encoló cada canción.
             </p>
 
-            <form onSubmit={handleSaveNick} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <form onSubmit={handleSaveNick} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <input
                 type="text"
                 placeholder="Ej. Raúl, María, DJ_Fiesta"
@@ -1636,16 +1607,17 @@ function App() {
                 maxLength="20"
                 value={nickInput}
                 onChange={(e) => setNickInput(e.target.value)}
-                className="rd-input"
+                className="input-glow"
+                style={{ paddingLeft: '1.25rem' }}
                 autoFocus
               />
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                 {guestName && (
-                  <button type="button" onClick={() => setShowNickModal(false)} className="rd-btn-secondary" style={{ width: 'auto', padding: '12px 20px', fontSize: '14px' }}>
+                  <button type="button" onClick={() => setShowNickModal(false)} className="btn-secondary">
                     Cancelar
                   </button>
                 )}
-                <button type="submit" className="rd-btn-primary" style={{ width: 'auto', padding: '12px 22px', fontSize: '14px' }}>
+                <button type="submit" className="btn-primary">
                   Empezar
                 </button>
               </div>

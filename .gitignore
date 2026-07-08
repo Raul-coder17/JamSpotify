@@ -6,6 +6,9 @@ frontend/node_modules/
 # Production builds
 frontend/dist/
 
+# Editor/preview tooling (local)
+.claude/launch.json
+
 # Local env files and state
 .env
 backend/.env

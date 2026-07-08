@@ -99,3 +99,27 @@ Para encontrar y forzar el cierre del proceso que está ocupando el puerto `3000
    ```bash
    kill -9 <PID>
    ```
+
+---
+
+## 🩺 Problemas encontrados y solucionados (desarrollo local)
+
+Registro de fallos diagnosticados durante el desarrollo local y cómo se resolvieron. Todos eran específicos del **modo desarrollo** (`npm run dev`); en producción no se manifiestan.
+
+### 1. Errores `EADDRINUSE` al iniciar (puerto 3000 ocupado)
+- **Síntoma:** al iniciar salían errores de puerto en uso y la app no respondía.
+- **Causa:** quedaba un proceso `node server.js` fantasma ocupando el puerto 3000. En Windows, matar el proceso `npm`/`nodemon` **no siempre** mata al hijo `node server.js`, que sobrevive y bloquea el puerto.
+- **Solución:** liberar el puerto (ver sección EADDRINUSE arriba: `netstat -ano | findstr :3000` + `taskkill /F /PID <pid>`) y reiniciar `npm run dev`.
+
+### 2. El anfitrión inicia sesión pero "vuelve sin sesión"
+- **Síntoma:** al hacer clic en "Iniciar como Anfitrión", Spotify pedía autorización, pero al volver la app seguía como si no hubiera iniciado sesión (sin controles de reproducción, sin poder aprobar invitados).
+- **Causa:** el `SPOTIFY_REDIRECT_URI` es `http://127.0.0.1:3000/api/callback` (Spotify ya no permite `localhost` para redirects de loopback), pero Vite sirve el frontend en `http://localhost:5173`. El callback fijaba la cookie del anfitrión en el host `127.0.0.1` y redirigía a `localhost` → la cookie quedaba **invisible** para el frontend (host distinto).
+- **Solución:** en desarrollo, el callback ahora devuelve el token del anfitrión por el **hash de la URL** (`#host_token=...`), que es independiente del origen. El frontend lo lee al arrancar, lo guarda en `localStorage.jam_host_token` y limpia el hash. (Commits `62659b4`.) Producción sigue usando la cookie httpOnly, sin cambios.
+
+### 3. Los invitados no aparecen en el dashboard para aprobarlos
+- **Síntoma:** un invitado solicitaba entrar y la **terminal lo registraba**, pero en el dashboard del anfitrión no aparecía ninguna solicitud (en la consola del navegador: `403 (Forbidden)` en `/guest/pending`).
+- **Causa:** en desarrollo la autenticación del anfitrión viaja por el header `X-Host-Token` (no hay cookie, que solo existe en producción). El polling de `/guest/pending` **no enviaba** ese header, así que el backend lo rechazaba con 403. Los controles de reproducción sí lo enviaban, por eso esos sí funcionaban.
+- **Solución:** se añadió el header `X-Host-Token` a `/guest/pending` (y a `/auth/logout`, que tenía el mismo olvido). Se auditaron los 14 endpoints protegidos por anfitrión; el resto ya lo enviaba. (Commit `6e75341`.)
+
+### Nota: la reproducción de música requiere Spotify Premium
+No es un fallo: el reproductor dentro del navegador (Spotify Web Playback SDK) **solo funciona con cuentas Premium**. Con una cuenta gratuita no reproducirá (daría `account_error`). Alternativa sin Premium: abrir la app oficial de Spotify en otro dispositivo, poner algo a reproducir, y en el dashboard elegir ese dispositivo con "Elegir Dispositivo".
